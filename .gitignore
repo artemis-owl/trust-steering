@@ -1,0 +1,15 @@
+.DS_Store
+
+# outputs
+out/
+tmp/
+
+# common build artifacts
+dist/
+build/
+
+# dependencies
+node_modules/
+venv/
+.venv/
+

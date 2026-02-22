@@ -1,0 +1,36 @@
+{
+  "schema_version": "0.1.0",
+  "event_id": "2f75eede-7e57-4a62-b9d5-28c9fd4b73d0",
+  "event_time": "2026-02-22T00:00:00Z",
+  "correlation_id": "corr-123",
+  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "span_id": "00f067aa0ba902b7",
+  "subject": {
+    "type": "user",
+    "id": "user:alice",
+    "attributes": {
+      "role": "developer"
+    }
+  },
+  "request": {
+    "action": "deploy",
+    "resource": "service:gateway",
+    "environment": "dev",
+    "attributes": {
+      "change_ticket": "CHG-0001"
+    }
+  },
+  "policy": {
+    "engine": "opa",
+    "bundle_version": "0.1.0",
+    "bundle_hash": "sha256:deadbeef",
+    "decision": "allow",
+    "rationale": [
+      { "code": "ALLOW_DEV", "message": "Deploys to dev are allowed for role=developer." }
+    ]
+  },
+  "data_classification": "internal",
+  "pii_flags": [],
+  "evidence_refs": []
+}
+
