@@ -1,17 +1,43 @@
 package steering.decision
 
-default decision := {"allow": false, "rationale": [{"code": "DEFAULT_DENY", "message": "Denied by default."}]}
+import rego.v1
 
-# Minimal input shape (evolves later):
-# input.subject: {id, attributes: {role, ...}}
-# input.request: {action, resource, environment, attributes: {...}}
+default allow := false
+default rationale := [{"code": "DEFAULT_DENY", "message": "Denied by default."}]
 
-decision := {"allow": true, "rationale": [{"code": "ALLOW_DEV", "message": "Dev actions allowed for developers."}]} if {
-  input.request.environment == "dev"
-  input.subject.attributes.role == "developer"
-  allowed_action[input.request.action]
+allow if {
+    input.request.action == "build"
 }
 
-allowed_action["deploy"]
-allowed_action["read"]
+allow if {
+    input.request.action == "deploy"
+    input.request.environment == "dev"
+    input.request.attributes.tests_passed == "true"
+}
 
+allow if {
+    input.request.action == "deploy"
+    input.request.environment == "prod"
+    input.request.attributes.human_approved == "true"
+}
+
+rationale := [{"code": "ALLOW_BUILD", "message": "Local builds are unrestricted."}] if {
+    input.request.action == "build"
+}
+
+rationale := [{"code": "ALLOW_DEPLOY_DEV", "message": "Dev deploy permitted because tests passed."}] if {
+    input.request.action == "deploy"
+    input.request.environment == "dev"
+    input.request.attributes.tests_passed == "true"
+}
+
+rationale := [{"code": "ALLOW_DEPLOY_PROD", "message": "Prod deploy permitted by explicit human approval."}] if {
+    input.request.action == "deploy"
+    input.request.environment == "prod"
+    input.request.attributes.human_approved == "true"
+}
+
+decision := {
+    "allow": allow,
+    "rationale": rationale
+}

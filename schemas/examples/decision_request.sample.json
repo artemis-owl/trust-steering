@@ -1,0 +1,19 @@
+{
+  "subject": {
+    "type": "user",
+    "id": "user:alice",
+    "attributes": {
+      "role": "developer"
+    }
+  },
+  "request": {
+    "action": "deploy",
+    "resource": "service:gateway",
+    "environment": "dev",
+    "attributes": {
+      "change_ticket": "CHG-0001"
+    }
+  },
+  "data_classification": "internal",
+  "pii_flags": []
+}

@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opa
+  namespace: steering
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opa
+  template:
+    metadata:
+      labels:
+        app: opa
+    spec:
+      containers:
+        - name: opa
+          image: openpolicyagent/opa:0.69.0
+          args:
+            - run
+            - --server
+            - --addr=0.0.0.0:8181
+            - --ignore=.*
+            - /policies
+          ports:
+            - containerPort: 8181
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8181
+          volumeMounts:
+            - name: policy
+              mountPath: /policies
+              readOnly: true
+      volumes:
+        - name: policy
+          configMap:
+            name: opa-policy
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opa
+  namespace: steering
+spec:
+  selector:
+    app: opa
+  ports:
+    - name: http
+      port: 8181
+      targetPort: 8181

@@ -1,0 +1,94 @@
+# Consolidated local stack: OPA + gateway + worker.
+# Optional Kafka-compatible broker: docker compose --profile stream up -d
+# Optional OpenTelemetry: docker compose --profile obs up -d (collector + Jaeger UI)
+# Project name is fixed so networks/volumes are predictable (see infra/compose/README.md).
+
+name: steering
+
+services:
+  opa:
+    image: openpolicyagent/opa:0.69.0
+    volumes:
+      - ../../policies/opa/rego:/policies:ro
+    command: ["run", "--server", "--addr=0.0.0.0:8181", "/policies"]
+    ports:
+      - "127.0.0.1:8181:8181"
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: ../../services/gateway
+      dockerfile: Dockerfile
+    environment:
+      OPA_URL: http://opa:8181
+      PORT: "8080"
+      POLICY_BUNDLE_HASH: ${POLICY_BUNDLE_HASH:-local-dev}
+      POLICY_BUNDLE_VERSION: ${POLICY_BUNDLE_VERSION:-0.1.0}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-}
+      KAFKA_TOPIC_DECISION_TRACE: ${KAFKA_TOPIC_DECISION_TRACE:-decision.trace.v1}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME_GATEWAY:-steering-gateway}
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      - opa
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ../../services/worker
+      dockerfile: Dockerfile
+    environment:
+      SERVICE_NAME: worker
+      SERVICE_VERSION: "0.1.0"
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-}
+      KAFKA_TOPIC_DECISION_TRACE: ${KAFKA_TOPIC_DECISION_TRACE:-decision.trace.v1}
+      KAFKA_TOPIC_EVIDENCE: ${KAFKA_TOPIC_EVIDENCE:-decision.evidence.v1}
+      KAFKA_CONSUMER_GROUP: ${KAFKA_CONSUMER_GROUP:-steering-worker}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME_WORKER:-steering-worker}
+    ports:
+      - "127.0.0.1:9090:9090"
+    restart: unless-stopped
+
+  jaeger:
+    profiles: ["obs"]
+    image: jaegertracing/all-in-one:1.57
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "127.0.0.1:16686:16686"
+
+  otel-collector:
+    profiles: ["obs"]
+    image: otel/opentelemetry-collector-contrib:0.115.1
+    command: ["--config=/etc/otel-collector.yaml"]
+    volumes:
+      - ../../observability/otel-collector.yaml:/etc/otel-collector.yaml:ro
+    ports:
+      - "127.0.0.1:4318:4318"
+    depends_on:
+      - jaeger
+    restart: unless-stopped
+
+  redpanda:
+    profiles: ["stream"]
+    image: docker.redpanda.com/redpandadata/redpanda:v24.2.11
+    command:
+      - redpanda
+      - start
+      - --mode
+      - dev-container
+      - --kafka-addr
+      - internal://0.0.0.0:9092,external://0.0.0.0:9093
+      - --advertise-kafka-addr
+      - internal://redpanda:9092,external://127.0.0.1:19092
+    ports:
+      - "127.0.0.1:19092:9093"
+      - "127.0.0.1:9644:9644"
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    restart: unless-stopped
+
+volumes:
+  redpanda-data:

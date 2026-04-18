@@ -3,6 +3,16 @@
 Goal: end with a runnable local demo that produces audit‑ready evidence:
 `HTTP → policy decision → decision trace event → stream → worker action → evidence event → OTel trace/logs/metrics → exportable audit packet`
 
+Current status (as of April 2026)
+- Schemas, OPA policy, gateway/worker HTTP services, schema checks, and demos are in place.
+- **Primary local stack:** Docker Compose (`infra/compose/`, `make compose-up`) — OPA + gateway + worker; optional Redpanda via `COMPOSE_PROFILES=stream`.
+- Kind remains available for Kubernetes-shaped smoke tests (`make kind-demo`).
+
+Implementation defaults
+- Local substrate: **Docker Compose** (default); **kind** for parity smoke tests
+- Services: **Go** (containers built from `services/*/Dockerfile`)
+- Mapping anchor: **AI RMF outcomes** (`docs/control-map.md`)
+
 ## Week 1 — Skeleton + Decision Trace v0.1
 **Reading**
 - NIST AI RMF 1.0 + Playbook: focus on Govern/Map/Measure/Manage and “evidence”
@@ -11,10 +21,12 @@ Goal: end with a runnable local demo that produces audit‑ready evidence:
 **Build**
 - Create repo scaffolding and a narrative spec for the Decision Trace.
 - Define required fields + invariants.
+- Implement minimal Go gateway returning a Decision Trace over HTTP.
 
 **Deliverables**
 - `docs/decision-trace-schema.md`
 - `schemas/decision_trace.avsc` and `schemas/evidence.avsc` (initial versions)
+- `services/gateway/` HTTP `POST /decide`
 
 ## Week 2 — Policy-as-code decisioning (OPA) + tests
 **Reading**
@@ -24,10 +36,12 @@ Goal: end with a runnable local demo that produces audit‑ready evidence:
 **Build**
 - Add OPA/Rego policy for basic allow/deny with rationale.
 - Add policy unit tests and a “policy diff” workflow in CI.
+- Wire gateway to OPA via `OPA_URL` and verify decisions end-to-end.
 
 **Deliverables**
 - `policies/opa/rego/decision.rego`
 - `policies/opa/tests/decision_test.rego`
+- Gateway policy calls via OPA (Compose, local process, or kind)
 
 ## Week 3 — Streaming governance: contracts “in motion”
 **Reading**
@@ -35,12 +49,15 @@ Goal: end with a runnable local demo that produces audit‑ready evidence:
 - NIST Privacy Framework: data minimization as an engineering requirement
 
 **Build**
-- Stand up a local Kafka-compatible broker (Redpanda recommended later).
+- Use the **Compose** Redpanda profile (`COMPOSE_PROFILES=stream ./scripts/compose_up.sh`) as the broker target; gateway/worker produce/consume JSON on `decision.trace.v1` / `decision.evidence.v1` (`scripts/demo_stream.sh`, `scripts/test_stream.sh`).
 - Enforce schema validation for produced/consumed events (CI + runtime).
+- Worker keeps `POST /execute` for tests and manual use alongside Kafka.
 
 **Deliverables**
 - `schemas/examples/*.json`
-- `scripts/test.sh` grows to include schema checks
+- `scripts/test.sh` includes schema checks
+- `services/worker/` Evidence responses
+- `infra/compose/docker-compose.yml` (broker profile documented in `infra/compose/README.md`)
 
 ## Week 4 — Evidence-grade observability (OTel) end-to-end
 **Reading**
@@ -82,4 +99,3 @@ Goal: end with a runnable local demo that produces audit‑ready evidence:
 - `docs/audit-packet.md`
 - `docs/threat-model.md`
 - `scripts/export_audit_packet.sh`
-

@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: steering
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+    spec:
+      containers:
+        - name: worker
+          image: steering-worker:dev
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: SERVICE_NAME
+              value: worker
+            - name: SERVICE_VERSION
+              value: 0.1.0
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://otel-collector:4318
+            - name: OTEL_SERVICE_NAME
+              value: steering-worker
+          ports:
+            - containerPort: 9090
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 9090
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: worker
+  namespace: steering
+spec:
+  selector:
+    app: worker
+  ports:
+    - name: http
+      port: 9090
+      targetPort: 9090
