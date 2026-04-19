@@ -38,11 +38,11 @@ This roadmap is organized around one anchor demo (“Decision Trace Gateway”) 
 
 - OpenTelemetry traces + collector + Jaeger in Compose (`obs` profile); correlation and trace IDs across HTTP and Kafka (`stream,obs`); Jaeger search by tags. Further work: metrics/logs, dashboards, deeper “evidence queries.”
 
-## Phase 4 — Provenance and software supply chain evidence
+## Phase 4 — Provenance and software supply chain evidence (done)
 
-- SBOM per artifact.
-- Sign and verify artifacts.
-- Attach attestations tied to a commit and a build recipe.
+- **[DONE]** SBOM per artifact (via Syft).
+- **[DONE]** Sign and verify artifacts (via Cosign).
+- **[DONE]** Attach attestations tied to a commit and a build recipe.
 
 ## Phase 5 — Audit packet export + change management
 

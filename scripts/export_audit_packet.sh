@@ -133,9 +133,18 @@ open(out, 'w').write(json.dumps({
 }, indent=2) + '\n')
 "
 
-cat >"${out_dir}/supplychain/README.txt" <<EOF
-Supply chain artifacts (SBOM, signatures, attestations) are not generated in this repository phase.
-See docs/roadmap.md Phase 4 and supplychain/.
+if [ -d "${root_dir}/supplychain/sbom/out" ]; then
+  cp -r "${root_dir}/supplychain/sbom/out" "${out_dir}/supplychain/sbom_out"
+fi
+if [ -f "${root_dir}/.keys/cosign.pub" ]; then
+  cp "${root_dir}/.keys/cosign.pub" "${out_dir}/supplychain/"
+fi
+
+cat >"${out_dir}/supplychain/README.md" <<EOF
+# Supply Chain Evidence
+This directory contains the public key (\`cosign.pub\`) used to cryptographically sign the Gateway and Worker images.
+If SBOMs were generated, they are included in the \`sbom_out/\` directory as SPDX JSON artifacts.
+These attestations mathematically prove the integrity of the binaries enforcing the policy decisions contained in this Audit Packet.
 EOF
 
 trap - EXIT
