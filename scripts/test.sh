@@ -14,8 +14,8 @@ validate_schema() {
 }
 
 if command -v opa >/dev/null 2>&1; then
-  echo "- opa test policies/opa"
-  opa test -v policies/opa >/dev/null
+  echo "- opa test policies/opa/rego policies/opa/tests"
+  opa test -v policies/opa/rego policies/opa/tests >/dev/null
 else
   echo "- opa not found; skipping Rego unit tests (install OPA to enable)"
 fi

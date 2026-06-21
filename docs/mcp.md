@@ -266,7 +266,8 @@ No. The MCP server is completely out of the data plane. It governs task authoriz
 The MCP client will fail to launch the server process. Without agent rules, the agent works normally (no governance). With rules, the agent would note that the tool is unavailable and inform you.
 
 **Q: Can I deny specific actions?**
-Yes. With OPA, write a Rego policy that denies based on `action`, `resource`, `environment`, or subject attributes. With local fallback, the allowed actions are hardcoded in `isAllowedAction()`.
+Yes. Both OPA and the local fallback engine dynamically load roles and permitted actions from the [roles.json](file:///Users/williamcorbett/working/repos/artemis/trust-systems/steering/policies/opa/rego/roles.json) configuration file. You can customize or add custom roles/permissions there to be enforced dynamically.
+
 
 **Q: Does this work with any MCP client?**
 Any client that supports MCP tool calls over stdio. This includes Cursor, Claude Desktop, Claude Code, VS Code Copilot, ChatGPT, and [many others](https://modelcontextprotocol.io/clients).

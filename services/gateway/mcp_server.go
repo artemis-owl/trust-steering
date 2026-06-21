@@ -151,7 +151,13 @@ func handleRequestWorkOrder(ctx context.Context, request mcp.CallToolRequest) (*
 		var parsed map[string]string
 		if err := json.Unmarshal([]byte(attributesJSON), &parsed); err == nil {
 			for k, v := range parsed {
-				attrs[k] = v
+				if k == "role" {
+					subject.Attributes["role"] = v
+				} else if k == "agent_id" {
+					subject.ID = v
+				} else {
+					attrs[k] = v
+				}
 			}
 		}
 	}

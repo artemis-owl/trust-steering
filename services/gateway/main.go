@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -279,19 +280,96 @@ func evaluatePolicyOPA(ctx context.Context, opaURL string, subject Subject, requ
 	}, nil
 }
 
+type RolesConfig struct {
+	Roles map[string][]string `json:"roles"`
+}
+
+func loadRolesConfig() (RolesConfig, error) {
+	path := os.Getenv("ROLES_CONFIG_PATH")
+	if path != "" {
+		return readRolesFile(path)
+	}
+
+	// Try common relative paths
+	candidates := []string{
+		"policies/opa/rego/roles.json",
+		"../../policies/opa/rego/roles.json",
+		"../../../policies/opa/rego/roles.json",
+	}
+	for _, c := range candidates {
+		if _, err := os.Stat(c); err == nil {
+			return readRolesFile(c)
+		}
+	}
+	return RolesConfig{}, fmt.Errorf("roles.json not found")
+}
+
+func readRolesFile(path string) (RolesConfig, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return RolesConfig{}, err
+	}
+	var config RolesConfig
+	if err := json.Unmarshal(data, &config); err != nil {
+		return RolesConfig{}, err
+	}
+	return config, nil
+}
+
+func actionAllowedForRole(role, action string) bool {
+	config, err := loadRolesConfig()
+	if err != nil {
+		// fallback to hardcoded generic defaults if file not found
+		if role == "developer" {
+			return true
+		}
+		switch role {
+		case "architect":
+			return action == "build" || action == "plan"
+		case "engineer":
+			return action == "build" || action == "refactor" || action == "deploy"
+		case "reviewer":
+			return action == "review" || action == "build"
+		}
+		return false
+	}
+
+	allowedActions, exists := config.Roles[role]
+	if !exists {
+		return false
+	}
+	for _, a := range allowedActions {
+		if a == action {
+			return true
+		}
+	}
+	return false
+}
+
 func evaluatePolicyLocal(subject Subject, request Request) PolicyDecision {
 	allow := false
 	rationale := []RationaleItem{{Code: "DEFAULT_DENY", Message: "Denied by default."}}
 
-	if request.Action == "build" {
-		allow = true
-		rationale = []RationaleItem{{Code: "ALLOW_BUILD", Message: "Local builds are unrestricted."}}
-	} else if request.Action == "deploy" && request.Environment == "dev" && request.Attributes["tests_passed"] == "true" {
-		allow = true
-		rationale = []RationaleItem{{Code: "ALLOW_DEPLOY_DEV", Message: "Dev deploy permitted because tests passed."}}
-	} else if request.Action == "deploy" && request.Environment == "prod" && request.Attributes["human_approved"] == "true" {
-		allow = true
-		rationale = []RationaleItem{{Code: "ALLOW_DEPLOY_PROD", Message: "Prod deploy permitted by explicit human approval."}}
+	role := subject.Attributes["role"]
+
+	if actionAllowedForRole(role, request.Action) {
+		if request.Action == "deploy" {
+			if request.Environment == "dev" && request.Attributes["tests_passed"] == "true" {
+				allow = true
+				rationale = []RationaleItem{{Code: "ALLOW_DEPLOY_DEV", Message: "Dev deploy permitted because tests passed."}}
+			} else if request.Environment == "prod" && request.Attributes["human_approved"] == "true" {
+				allow = true
+				rationale = []RationaleItem{{Code: "ALLOW_DEPLOY_PROD", Message: "Prod deploy permitted by explicit human approval."}}
+			}
+		} else {
+			allow = true
+			rationale = []RationaleItem{
+				{
+					Code:    "ALLOW_ACTION",
+					Message: fmt.Sprintf("Action '%s' permitted for role '%s'.", request.Action, role),
+				},
+			}
+		}
 	}
 
 	decision := "deny"
@@ -311,15 +389,6 @@ func evaluatePolicyLocal(subject Subject, request Request) PolicyDecision {
 		BundleHash:    envOr("POLICY_BUNDLE_HASH", "local-dev"),
 		Decision:      decision,
 		Rationale:     rationale,
-	}
-}
-
-func isAllowedAction(action string) bool {
-	switch strings.ToLower(action) {
-	case "deploy", "read", "inference", "build", "refactor":
-		return true
-	default:
-		return false
 	}
 }
 

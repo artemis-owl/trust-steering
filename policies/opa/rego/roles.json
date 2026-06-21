@@ -1,0 +1,8 @@
+{
+  "roles": {
+    "developer": ["build", "refactor", "deploy", "plan", "review"],
+    "architect": ["build", "plan"],
+    "engineer": ["build", "refactor", "deploy"],
+    "reviewer": ["build", "review"]
+  }
+}

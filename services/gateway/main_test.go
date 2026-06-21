@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -160,3 +161,51 @@ func TestHandleDecideRecordsSpansWithPolicyAttribute(t *testing.T) {
 		t.Fatalf("expected policy.decision on a span, got %d spans", len(ended))
 	}
 }
+
+func TestActionAllowedForRoleDynamic(t *testing.T) {
+	if !actionAllowedForRole("developer", "refactor") {
+		t.Errorf("expected developer to be allowed refactor")
+	}
+	if !actionAllowedForRole("architect", "plan") {
+		t.Errorf("expected architect to be allowed plan")
+	}
+	if actionAllowedForRole("reviewer", "refactor") {
+		t.Errorf("expected reviewer to NOT be allowed refactor")
+	}
+}
+
+func TestActionAllowedForRoleCustomConfigFile(t *testing.T) {
+	tempFile, err := os.CreateTemp("", "roles-*.json")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tempFile.Name())
+
+	configJSON := `{
+		"roles": {
+			"custom-tester": ["test-action"],
+			"developer": ["build"]
+		}
+	}`
+	if _, err := tempFile.Write([]byte(configJSON)); err != nil {
+		t.Fatalf("failed to write to temp file: %v", err)
+	}
+	_ = tempFile.Close()
+
+	t.Setenv("ROLES_CONFIG_PATH", tempFile.Name())
+
+	if !actionAllowedForRole("custom-tester", "test-action") {
+		t.Errorf("expected custom-tester to be allowed test-action")
+	}
+	if actionAllowedForRole("custom-tester", "build") {
+		t.Errorf("expected custom-tester to NOT be allowed build")
+	}
+	if !actionAllowedForRole("developer", "build") {
+		t.Errorf("expected developer to be allowed build")
+	}
+	if actionAllowedForRole("developer", "refactor") {
+		t.Errorf("expected developer to NOT be allowed refactor (overwritten by config)")
+	}
+}
+
+
