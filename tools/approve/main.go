@@ -42,6 +42,9 @@ func approvalsDir() string {
 	if d := os.Getenv("APPROVALS_DIR"); d != "" {
 		return d
 	}
+	if root := os.Getenv("STEERING_ROOT"); root != "" {
+		return filepath.Join(root, "out", "approvals")
+	}
 	return "out/approvals"
 }
 

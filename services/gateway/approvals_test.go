@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -33,6 +35,31 @@ func grantForTest(t *testing.T, correlationID, approver string, ttl time.Duratio
 
 func prodDeployRequest() Request {
 	return Request{Action: "deploy", Resource: "service:gateway", Environment: "prod"}
+}
+
+func TestSteeringRootAnchorsConfigOutOfTree(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("STEERING_ROOT", root)
+	t.Setenv("APPROVALS_DIR", "")
+	t.Setenv("ROLES_CONFIG_PATH", "")
+
+	if got, want := approvalsDir(), filepath.Join(root, "out", "approvals"); got != want {
+		t.Fatalf("approvalsDir() = %q, want %q", got, want)
+	}
+
+	rolesPath := filepath.Join(root, "policies", "opa", "rego")
+	if err := os.MkdirAll(rolesPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(rolesPath, "roles.json"), []byte(`{"roles":{"tester":["ship"]}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !actionAllowedForRole("tester", "ship") {
+		t.Fatal("expected roles.json to resolve via STEERING_ROOT")
+	}
+	if actionAllowedForRole("developer", "build") {
+		t.Fatal("expected STEERING_ROOT roles to take precedence over relative candidates")
+	}
 }
 
 func TestApprovalConsumeIsSingleUseAndMatched(t *testing.T) {

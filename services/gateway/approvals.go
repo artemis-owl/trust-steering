@@ -36,7 +36,16 @@ type Approval struct {
 var correlationIDPattern = regexp.MustCompile(`^corr-[0-9a-f]{16}$`)
 
 func approvalsDir() string {
-	return envOr("APPROVALS_DIR", "out/approvals")
+	if d := os.Getenv("APPROVALS_DIR"); d != "" {
+		return d
+	}
+	// Anchor to STEERING_ROOT when set so the agent-spawned MCP process
+	// (whose cwd is the governed repo) and the human's approve CLI (run from
+	// the steering repo) always share one store.
+	if root := os.Getenv("STEERING_ROOT"); root != "" {
+		return filepath.Join(root, "out", "approvals")
+	}
+	return "out/approvals"
 }
 
 func approvalPath(correlationID string) string {

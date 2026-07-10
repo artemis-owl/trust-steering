@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -301,6 +302,12 @@ func loadRolesConfig() (RolesConfig, error) {
 	path := os.Getenv("ROLES_CONFIG_PATH")
 	if path != "" {
 		return readRolesFile(path)
+	}
+
+	// STEERING_ROOT makes config resolution independent of cwd — required
+	// when the MCP gateway is spawned by an agent working in another repo.
+	if root := os.Getenv("STEERING_ROOT"); root != "" {
+		return readRolesFile(filepath.Join(root, "policies", "opa", "rego", "roles.json"))
 	}
 
 	// Try common relative paths

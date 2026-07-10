@@ -142,7 +142,8 @@ Create the MCP config for your client, pointing to the compiled binary:
       "command": "/absolute/path/to/gateway",
       "args": ["--mcp"],
       "env": {
-        "ALLOW_LOCAL_POLICY_FALLBACK": "true"
+        "ALLOW_LOCAL_POLICY_FALLBACK": "true",
+        "STEERING_ROOT": "/absolute/path/to/steering"
       }
     }
   }
@@ -157,7 +158,8 @@ Create the MCP config for your client, pointing to the compiled binary:
       "command": "/absolute/path/to/gateway",
       "args": ["--mcp"],
       "env": {
-        "ALLOW_LOCAL_POLICY_FALLBACK": "true"
+        "ALLOW_LOCAL_POLICY_FALLBACK": "true",
+        "STEERING_ROOT": "/absolute/path/to/steering"
       }
     }
   }
@@ -172,7 +174,8 @@ Create the MCP config for your client, pointing to the compiled binary:
       "command": "/absolute/path/to/gateway",
       "args": ["--mcp"],
       "env": {
-        "ALLOW_LOCAL_POLICY_FALLBACK": "true"
+        "ALLOW_LOCAL_POLICY_FALLBACK": "true",
+        "STEERING_ROOT": "/absolute/path/to/steering"
       }
     }
   }
@@ -282,7 +285,8 @@ Set `OTEL_EXPORTER_OTLP_ENDPOINT` and spans are emitted for each tool call, tagg
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | *(unset)* | Distributed tracing |
 | `POLICY_BUNDLE_HASH` | `local-dev` | Reported in decision traces |
 | `SCHEMA_VERSION` | `0.1.0` | Schema version stamped on events |
-| `APPROVALS_DIR` | `out/approvals` | Server-side human approval store (shared with `scripts/approve.sh`) |
+| `STEERING_ROOT` | *(unset)* | Absolute path to the steering repo — **set this in every MCP client config**: the gateway inherits the *governed* repo's cwd, so without it `roles.json` won't resolve and the gateway and approve CLI would read different approval stores |
+| `APPROVALS_DIR` | `$STEERING_ROOT/out/approvals`, else `out/approvals` | Server-side human approval store (shared with `scripts/approve.sh`) |
 | `MCP_SUBJECT_ROLE` | `developer` | Role asserted for the MCP client — set by the operator, never by the agent |
 | `MCP_AGENT_ID` | `mcp-client` | Subject ID recorded for the MCP client |
 
