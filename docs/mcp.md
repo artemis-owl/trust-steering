@@ -46,6 +46,8 @@ Call **before** starting a significant task.
 | `resource` | ✅ | Target: `wiki`, `cluster`, `repository`, `modelbase` |
 | `environment` | | `dev`, `staging`, `prod` (defaults to `dev`) |
 | `context` | | Free-text description of what the agent plans to do |
+| `attributes` | | JSON object of string attributes (e.g. `{"tests_passed":"true"}`). Trust-reserved keys (`role`, `agent_id`, `human_approved`) are rejected — identity comes from gateway config and approvals from the server-side store |
+| `correlation_id` | | Only for retrying after a human granted a pending approval (see [Human approval flow](#human-approval-flow)) |
 
 **Returns:**
 ```json
@@ -59,6 +61,30 @@ Call **before** starting a significant task.
 ```
 
 If `decision` is `"deny"`, the agent should **stop** and relay the rationale to the user.
+
+### Human approval flow
+
+Prod deploys are gated on **out-of-band human approval**. The agent cannot self-attest: `human_approved` is a trust-reserved attribute, and the policy input only ever receives it from the gateway's server-side approval store (`APPROVALS_DIR`, default `out/approvals`).
+
+The flow:
+
+1. Agent calls `request_work_order` with `action=deploy, environment=prod`. The gateway records a **pending approval** and returns:
+   ```json
+   {
+     "correlation_id": "corr-1a2b3c4d5e6f7a8b",
+     "decision": "deny",
+     "approval_status": "pending",
+     "approval_instructions": "A human must grant this out-of-band: ./scripts/approve.sh grant corr-1a2b3c4d5e6f7a8b — then retry request_work_order with this correlation_id. Do not attempt to approve it yourself."
+   }
+   ```
+2. A **human** reviews and grants (or denies) it:
+   ```
+   ./scripts/approve.sh list
+   ./scripts/approve.sh grant corr-1a2b3c4d5e6f7a8b        # -approver user:name -ttl 15m
+   ```
+3. The agent retries `request_work_order` with the same parameters plus `correlation_id`. The gateway consumes the grant (**single-use**, TTL-bound, matched against action/resource/environment) and the decision trace records `human_approved=true` and the `approver` identity.
+
+A replayed correlation_id after consumption, an expired grant, or a grant for a different action/resource/environment all deny again.
 
 ### `submit_evidence`
 
@@ -256,6 +282,9 @@ Set `OTEL_EXPORTER_OTLP_ENDPOINT` and spans are emitted for each tool call, tagg
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | *(unset)* | Distributed tracing |
 | `POLICY_BUNDLE_HASH` | `local-dev` | Reported in decision traces |
 | `SCHEMA_VERSION` | `0.1.0` | Schema version stamped on events |
+| `APPROVALS_DIR` | `out/approvals` | Server-side human approval store (shared with `scripts/approve.sh`) |
+| `MCP_SUBJECT_ROLE` | `developer` | Role asserted for the MCP client — set by the operator, never by the agent |
+| `MCP_AGENT_ID` | `mcp-client` | Subject ID recorded for the MCP client |
 
 ## FAQ
 
@@ -264,6 +293,9 @@ No. The MCP server is completely out of the data plane. It governs task authoriz
 
 **Q: What happens if the MCP server is down?**
 The MCP client will fail to launch the server process. Without agent rules, the agent works normally (no governance). With rules, the agent would note that the tool is unavailable and inform you.
+
+**Q: Can the agent approve its own prod deploy?**
+No. `human_approved` is trust-reserved and rejected from client input. Approval only exists as a server-side record written by a human via `scripts/approve.sh`, is bound to one correlation_id + action/resource/environment, expires, and is consumed on first use.
 
 **Q: Can I deny specific actions?**
 Yes. Both OPA and the local fallback engine dynamically load roles and permitted actions from the [roles.json](file:///Users/williamcorbett/working/repos/artemis/trust-systems/steering/policies/opa/rego/roles.json) configuration file. You can customize or add custom roles/permissions there to be enforced dynamically.

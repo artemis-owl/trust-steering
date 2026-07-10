@@ -31,6 +31,7 @@ jobs:
           (cd tools/schema-check && go build ./...)
           (cd tools/kafka-read-one && go build ./...)
           (cd tools/audit-packet-fetch && go build ./...)
+          (cd tools/approve && go build ./...)
 
       - name: Schema checks
         run: |

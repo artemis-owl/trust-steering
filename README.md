@@ -26,7 +26,8 @@ The Steering Control Plane provides a local-first reference architecture for **E
 The Gateway embeds an MCP Server (`gateway --mcp`) that exposes `request_work_order` and `submit_evidence` as tools to commodity AI agents (Cursor, Claude Code, Aider, Cline).
 - The Gateway is **out-of-band** (Semantic Governance). It governs authority without proxying inference traffic.
 - The MCP client is the governed party: subject identity/role come from gateway configuration, trust-reserved attributes (`role`, `agent_id`, `human_approved`) are rejected from client input, and an allow is only returned once the decision trace is durably persisted.
-- See `docs/mcp.md` for setup instructions; the out-of-band human approval flow for prod actions is in progress (`docs/roadmap.md`, Phase 6).
+- Prod deploys require **out-of-band human approval**: the gateway records a pending approval, a human grants it with `./scripts/approve.sh grant <correlation_id>`, and the grant is single-use, TTL-bound, and consumed server-side — the agent can never self-approve.
+- See `docs/mcp.md` for setup and the approval-flow walkthrough.
 
 ### Streaming and Microservices
 `Decision request JSON -> gateway /decide -> Decision Trace -> worker /execute -> Evidence`

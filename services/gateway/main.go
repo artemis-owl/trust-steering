@@ -164,6 +164,15 @@ func handleDecide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	correlationID := req.CorrelationID
+	if correlationID == "" {
+		correlationID = "corr-" + randomHex(8)
+	}
+
+	// Approval state only enters policy input via the server-side store;
+	// caller-supplied approval attributes are stripped.
+	approval := applyApprovalGate(correlationID, &req.Request)
+
 	policyDecision, err := evaluatePolicy(r.Context(), req.Subject, req.Request)
 	if err != nil {
 		if errors.Is(err, errPolicyUnavailable) {
@@ -174,9 +183,12 @@ func handleDecide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	correlationID := req.CorrelationID
-	if correlationID == "" {
-		correlationID = "corr-" + randomHex(8)
+	if policyDecision.Decision == "deny" && approval == nil && requiresHumanApproval(req.Request) {
+		if err := recordPendingApproval(correlationID, req.Request); err != nil {
+			log.Printf("approvals: record pending for %s: %v", correlationID, err)
+		} else {
+			policyDecision.Rationale = append(policyDecision.Rationale, approvalPendingRationale(correlationID))
+		}
 	}
 
 	traceID, spanID := traceIDsForDecisionTrace(r.Context(), req.TraceID, req.SpanID)

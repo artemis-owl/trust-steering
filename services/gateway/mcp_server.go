@@ -60,6 +60,12 @@ func newMCPServer() *server.MCPServer {
 		mcp.WithString("context",
 			mcp.Description("Free-text description of what the agent plans to do"),
 		),
+		mcp.WithString("correlation_id",
+			mcp.Description(
+				"Only for retrying a work order that came back decision=deny with approval_status=pending: "+
+					"pass the correlation_id from that response after a human has granted the approval out-of-band.",
+			),
+		),
 		mcp.WithString("attributes",
 			mcp.Description(
 				"Optional structured JSON string of key-value attributes (e.g. {\"tests_passed\":\"true\"}). "+
@@ -180,12 +186,31 @@ func handleRequestWorkOrder(ctx context.Context, request mcp.CallToolRequest) (*
 		reqObj.Attributes = attrs
 	}
 
+	correlationID := "corr-" + randomHex(8)
+	if c, err := request.RequireString("correlation_id"); err == nil && c != "" {
+		if !validCorrelationID(c) {
+			return mcp.NewToolResultError(fmt.Sprintf("invalid correlation_id %q", c)), nil
+		}
+		correlationID = c
+	}
+
+	// Approval state only enters policy input via the server-side store; the
+	// agent cannot assert it (human_approved is trust-reserved above).
+	approval := applyApprovalGate(correlationID, &reqObj)
+
 	policyDecision, err := evaluatePolicy(ctx, subject, reqObj)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Policy evaluation failed: %v", err)), nil
 	}
 
-	correlationID := "corr-" + randomHex(8)
+	approvalStatus := ""
+	if policyDecision.Decision == "deny" && approval == nil && requiresHumanApproval(reqObj) {
+		if err := recordPendingApproval(correlationID, reqObj); err == nil {
+			approvalStatus = "pending"
+			policyDecision.Rationale = append(policyDecision.Rationale, approvalPendingRationale(correlationID))
+		}
+	}
+
 	traceID := randomHex(16)
 	spanID := randomHex(8)
 
@@ -222,6 +247,17 @@ func handleRequestWorkOrder(ctx context.Context, request mcp.CallToolRequest) (*
 		"rationale":      policyDecision.Rationale,
 		"event_id":       decisionTrace.EventID,
 		"trace_id":       traceID,
+	}
+	if approvalStatus == "pending" {
+		result["approval_status"] = "pending"
+		result["approval_instructions"] = fmt.Sprintf(
+			"A human must grant this out-of-band: ./scripts/approve.sh grant %s — then retry request_work_order with this correlation_id. Do not attempt to approve it yourself.",
+			correlationID,
+		)
+	}
+	if approval != nil {
+		result["approval_status"] = "consumed"
+		result["approver"] = approval.Approver
 	}
 
 	out, _ := json.MarshalIndent(result, "", "  ")
