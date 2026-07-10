@@ -61,7 +61,11 @@ func newMCPServer() *server.MCPServer {
 			mcp.Description("Free-text description of what the agent plans to do"),
 		),
 		mcp.WithString("attributes",
-			mcp.Description("Optional structured JSON string of key-value attributes (e.g. {\"tests_passed\":\"true\"})"),
+			mcp.Description(
+				"Optional structured JSON string of key-value attributes (e.g. {\"tests_passed\":\"true\"}). "+
+					"Trust-reserved keys (role, agent_id, human_approved) are rejected: identity comes from the "+
+					"gateway's own configuration and approvals must originate out-of-band.",
+			),
 		),
 	)
 
@@ -104,6 +108,16 @@ func newMCPServer() *server.MCPServer {
 	return s
 }
 
+// isTrustReservedAttribute reports whether a client-supplied attribute key
+// would let the governed agent assert its own identity or approval state.
+func isTrustReservedAttribute(key string) bool {
+	switch key {
+	case "role", "agent_id", "human_approved":
+		return true
+	}
+	return false
+}
+
 func handleRequestWorkOrder(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, span := otel.Tracer("steering.mcp").Start(ctx, "mcp.request_work_order")
 	defer span.End()
@@ -132,10 +146,13 @@ func handleRequestWorkOrder(ctx context.Context, request mcp.CallToolRequest) (*
 		attributesJSON = a
 	}
 
+	// Subject identity and role come from the gateway's own configuration.
+	// The MCP client is the governed party and must not be able to assert
+	// its own identity, role, or approval state.
 	subject := Subject{
 		Type:       "agent",
-		ID:         "mcp-client",
-		Attributes: map[string]string{"role": "developer"},
+		ID:         envOr("MCP_AGENT_ID", "mcp-client"),
+		Attributes: map[string]string{"role": envOr("MCP_SUBJECT_ROLE", "developer")},
 	}
 
 	reqObj := Request{
@@ -149,16 +166,14 @@ func handleRequestWorkOrder(ctx context.Context, request mcp.CallToolRequest) (*
 	}
 	if attributesJSON != "" {
 		var parsed map[string]string
-		if err := json.Unmarshal([]byte(attributesJSON), &parsed); err == nil {
-			for k, v := range parsed {
-				if k == "role" {
-					subject.Attributes["role"] = v
-				} else if k == "agent_id" {
-					subject.ID = v
-				} else {
-					attrs[k] = v
-				}
+		if err := json.Unmarshal([]byte(attributesJSON), &parsed); err != nil {
+			return mcp.NewToolResultError("attributes must be a JSON object of string values"), nil
+		}
+		for k, v := range parsed {
+			if isTrustReservedAttribute(k) {
+				return mcp.NewToolResultError(fmt.Sprintf("attribute %q is trust-reserved and cannot be self-attested", k)), nil
 			}
+			attrs[k] = v
 		}
 	}
 	if len(attrs) > 0 {
@@ -189,11 +204,15 @@ func handleRequestWorkOrder(ctx context.Context, request mcp.CallToolRequest) (*
 		EvidenceRefs:       []string{},
 	}
 
-	// Publish to Kafka if available
+	// When a broker is configured, failure to persist the trace must fail the
+	// work order — same contract as the HTTP /decide path.
 	if kafkaClient != nil {
 		pubCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
-		_ = publishDecisionTrace(pubCtx, kafkaClient, decisionTrace, correlationID)
+		if err := publishDecisionTrace(pubCtx, kafkaClient, decisionTrace, correlationID); err != nil {
+			span.RecordError(err)
+			return mcp.NewToolResultError(fmt.Sprintf("failed to persist decision trace, work order not authorized: %v", err)), nil
+		}
 	}
 
 	// Build response
@@ -261,12 +280,18 @@ func handleSubmitEvidence(ctx context.Context, request mcp.CallToolRequest) (*mc
 		},
 	}
 
-	// Publish to Kafka if available
+	// When a broker is configured, evidence must be durable before we report it recorded.
 	if kafkaClient != nil {
-		payload, _ := json.Marshal(evidence)
+		payload, err := json.Marshal(evidence)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("failed to encode evidence: %v", err)), nil
+		}
 		pubCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
-		_ = publishEvidence(pubCtx, kafkaClient, payload, correlationID)
+		if err := publishEvidence(pubCtx, kafkaClient, payload, correlationID); err != nil {
+			span.RecordError(err)
+			return mcp.NewToolResultError(fmt.Sprintf("failed to persist evidence event: %v", err)), nil
+		}
 	}
 
 	out, _ := json.MarshalIndent(map[string]any{

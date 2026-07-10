@@ -13,17 +13,18 @@ for cmd in docker cosign; do
   fi
 done
 
-# Start local registry if not running
+# Start local registry if not running (loopback only; remove with `docker rm -f local-registry`)
 if ! docker inspect local-registry >/dev/null 2>&1; then
-  echo "Starting local Docker registry on port 5001..."
-  docker run -d -p 5001:5000 --name local-registry registry:2
+  echo "Starting local Docker registry on 127.0.0.1:5001..."
+  docker run -d -p 127.0.0.1:5001:5000 --name local-registry registry:2.8.3
 fi
 
-# Ensure keys exist
+# Ensure keys exist. Keys live in the gitignored .keys/ dir and must never be
+# committed; set COSIGN_PASSWORD to protect them beyond local-demo use.
 mkdir -p "${keys_dir}"
 if [ ! -f "${keys_dir}/cosign.key" ]; then
   echo "Generating Cosign keypair..."
-  export COSIGN_PASSWORD=""
+  export COSIGN_PASSWORD="${COSIGN_PASSWORD:-}"
   cd "${keys_dir}" && cosign generate-key-pair
   cd "${root_dir}"
 fi
@@ -38,7 +39,7 @@ push_and_sign() {
   docker tag "${local_tag}" "${registry_tag}"
   docker push "${registry_tag}"
 
-  export COSIGN_PASSWORD=""
+  export COSIGN_PASSWORD="${COSIGN_PASSWORD:-}"
 
   echo "Signing image ${registry_tag}..."
   cosign sign --key "${keys_dir}/cosign.key" --yes "${registry_tag}"

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -319,18 +320,8 @@ func readRolesFile(path string) (RolesConfig, error) {
 func actionAllowedForRole(role, action string) bool {
 	config, err := loadRolesConfig()
 	if err != nil {
-		// fallback to hardcoded generic defaults if file not found
-		if role == "developer" {
-			return true
-		}
-		switch role {
-		case "architect":
-			return action == "build" || action == "plan"
-		case "engineer":
-			return action == "build" || action == "refactor" || action == "deploy"
-		case "reviewer":
-			return action == "review" || action == "build"
-		}
+		// Fail closed: without a roles config there is no basis to authorize.
+		log.Printf("roles config unavailable, denying %q for role %q: %v", action, role, err)
 		return false
 	}
 

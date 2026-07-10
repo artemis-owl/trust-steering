@@ -1,0 +1,46 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache-dependency-path: |
+            services/gateway/go.sum
+            services/worker/go.sum
+
+      - name: Gateway tests
+        working-directory: services/gateway
+        run: go vet ./... && go test ./...
+
+      - name: Worker tests
+        working-directory: services/worker
+        run: go vet ./... && go test ./...
+
+      - name: Build tools
+        run: |
+          (cd tools/schema-check && go build ./...)
+          (cd tools/kafka-read-one && go build ./...)
+          (cd tools/audit-packet-fetch && go build ./...)
+
+      - name: Schema checks
+        run: |
+          (cd tools/schema-check && go run . ../../schemas/decision_trace.avsc ../../schemas/examples/decision_trace.sample.json)
+          (cd tools/schema-check && go run . ../../schemas/evidence.avsc ../../schemas/examples/evidence.sample.json)
+
+      - name: Setup OPA
+        uses: open-policy-agent/setup-opa@v2
+        with:
+          version: latest
+
+      - name: OPA policy tests
+        run: opa test -v policies/opa/rego policies/opa/tests

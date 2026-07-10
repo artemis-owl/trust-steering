@@ -3,7 +3,7 @@
 Goal: end with a runnable local demo that produces audit‑ready evidence:
 `HTTP → policy decision → decision trace event → stream → worker action → evidence event → OTel trace/logs/metrics → exportable audit packet`
 
-Current status (as of April 2026)
+Current status (as of July 2026) — the 6-week plan is complete except explicitly deferred stretch items (dashboards, formal specs); current work is tracked in `docs/roadmap.md` (Phase 6).
 - Schemas, OPA policy, gateway/worker HTTP services, schema checks, and demos are in place.
 - **Primary local stack:** Docker Compose (`infra/compose/`, `make compose-up`) — OPA + gateway + worker; optional Redpanda via `COMPOSE_PROFILES=stream`.
 - Kind remains available for Kubernetes-shaped smoke tests (`make kind-demo`).

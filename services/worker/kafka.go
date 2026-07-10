@@ -70,11 +70,15 @@ func newKafkaWorkerClient() (*kgo.Client, error) {
 	if len(brokers) == 0 {
 		return nil, errors.New("KAFKA_BOOTSTRAP_SERVERS has no broker addresses")
 	}
+	// Autocommit is disabled so a trace offset is only committed once its
+	// evidence has been durably produced; otherwise evidence could be lost
+	// with the trace already marked consumed.
 	return kgo.NewClient(
 		kgo.SeedBrokers(brokers...),
 		kgo.ConsumerGroup(kafkaConsumerGroup()),
 		kgo.ConsumeTopics(kafkaTraceTopic()),
 		kgo.AllowAutoTopicCreation(),
+		kgo.DisableAutoCommit(),
 	)
 }
 
@@ -96,11 +100,22 @@ func runKafkaConsumer(ctx context.Context, cl *kgo.Client) {
 			procCtx, span := otel.Tracer("steering-worker").Start(procCtx, "kafka.process_decision_trace")
 			defer span.End()
 
+			// Poison records (unparseable or unmappable) are committed so they
+			// cannot wedge the consumer; only transient produce failures leave
+			// the offset uncommitted for redelivery.
+			commit := func() {
+				if err := cl.CommitRecords(procCtx, r); err != nil {
+					span.RecordError(err)
+					log.Printf("kafka: commit offset for %s/%d@%d: %v", r.Topic, r.Partition, r.Offset, err)
+				}
+			}
+
 			var trace DecisionTrace
 			if err := json.Unmarshal(r.Value, &trace); err != nil {
 				span.RecordError(err)
 				span.SetStatus(codes.Error, "unmarshal trace")
 				log.Printf("kafka: skip invalid trace record: %v", err)
+				commit()
 				return
 			}
 			span.SetAttributes(
@@ -113,6 +128,7 @@ func runKafkaConsumer(ctx context.Context, cl *kgo.Client) {
 				span.RecordError(err)
 				span.SetStatus(codes.Error, "trace to evidence")
 				log.Printf("kafka: skip trace %s: %v", trace.CorrelationID, err)
+				commit()
 				return
 			}
 			payload, err := json.Marshal(ev)
@@ -120,6 +136,7 @@ func runKafkaConsumer(ctx context.Context, cl *kgo.Client) {
 				span.RecordError(err)
 				span.SetStatus(codes.Error, "marshal evidence")
 				log.Printf("kafka: marshal evidence: %v", err)
+				commit()
 				return
 			}
 			pctx, cancel := context.WithTimeout(procCtx, 10*time.Second)
@@ -135,8 +152,10 @@ func runKafkaConsumer(ctx context.Context, cl *kgo.Client) {
 			if err := res.FirstErr(); err != nil {
 				span.RecordError(err)
 				span.SetStatus(codes.Error, "produce evidence")
-				log.Printf("kafka: produce evidence: %v", err)
+				log.Printf("kafka: produce evidence for %s failed; offset left uncommitted for redelivery: %v", trace.CorrelationID, err)
+				return
 			}
+			commit()
 		})
 	}
 }

@@ -9,7 +9,7 @@ This repository is organized to support incremental, local-only work on **Decisi
 - `services/` — runnable components (gateway and worker)
 - `policies/` — OPA/Rego policies, tests, and policy bundles
 - `schemas/` — message/event schemas and example payloads
-- `observability/` — OpenTelemetry collector config + dashboards
+- `observability/` — OpenTelemetry collector config (dashboards deferred; see roadmap)
 - `supplychain/` — SBOM, signing, attestations, provenance notes/scripts
 - `scripts/` — developer workflows (up/down/test/export)
 - `tools/` — small helpers (e.g. `tools/schema-check`, `tools/kafka-read-one`)

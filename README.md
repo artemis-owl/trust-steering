@@ -22,7 +22,13 @@ The Steering Control Plane provides a local-first reference architecture for **E
 - Control map (AI RMF outcomes): `docs/control-map.md`
 
 ## Current demo paths
-Minimal evidence loop:
+### Trust-in-the-Loop Agent Integration (MCP)
+The Gateway embeds an MCP Server (`gateway --mcp`) that exposes `request_work_order` and `submit_evidence` as tools to commodity AI agents (Cursor, Claude Code, Aider, Cline).
+- The Gateway is **out-of-band** (Semantic Governance). It governs authority without proxying inference traffic.
+- The MCP client is the governed party: subject identity/role come from gateway configuration, trust-reserved attributes (`role`, `agent_id`, `human_approved`) are rejected from client input, and an allow is only returned once the decision trace is durably persisted.
+- See `docs/mcp.md` for setup instructions; the out-of-band human approval flow for prod actions is in progress (`docs/roadmap.md`, Phase 6).
+
+### Streaming and Microservices
 `Decision request JSON -> gateway /decide -> Decision Trace -> worker /execute -> Evidence`
 
 **Docker Compose (recommended default):**
@@ -62,7 +68,7 @@ Compose and kind use OPA in-container; the local process path prefers a host `op
 - `services/` gateway + worker services
 - `policies/` OPA/Rego policies, tests, bundles
 - `schemas/` event schemas + sample payloads
-- `observability/` OTel collector config + dashboards
+- `observability/` OTel collector config (dashboards deferred; see roadmap)
 - `supplychain/` SBOM/signing/attestations (SLSA-lite)
 - `scripts/` “make it go” scripts (local dev + evidence export)
 - `tools/` schema validation and one-shot Kafka helpers (`tools/kafka-read-one`)

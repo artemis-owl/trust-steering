@@ -2,7 +2,19 @@
 
 # outputs
 out/
+out_test/
+out.json
 tmp/
+
+# signing keys — never commit; sign_images.sh regenerates on demand
+.keys/
+
+# compiled binaries
+services/gateway/gateway
+services/worker/worker
+tools/schema-check/schema-check
+tools/kafka-read-one/kafka-read-one
+tools/audit-packet-fetch/audit-packet-fetch
 
 # common build artifacts
 dist/
