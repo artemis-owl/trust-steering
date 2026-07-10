@@ -17,7 +17,7 @@ The July 2026 audit found that the gateway's trust boundary was self-attested: c
 
 1. **[DONE 2026-07-09]** Evidence durability: MCP tool calls fail closed when the decision trace or evidence event cannot be persisted (same contract as HTTP `/decide`); worker commits offsets only after evidence is durably produced.
 2. **[DONE 2026-07-09]** Non-spoofable MCP subject: role/identity come from gateway configuration (`MCP_SUBJECT_ROLE`, `MCP_AGENT_ID`); trust-reserved attributes (`role`, `agent_id`, `human_approved`) are rejected from client input.
-3. **[DONE 2026-07-09]** Key hygiene: cosign keys untracked and gitignored (`sign_images.sh` regenerates on demand). *Follow-up: purge the old key from git history on the remote and treat it as rotated.*
+3. **[DONE 2026-07-09]** Key hygiene: cosign keys untracked and gitignored (`sign_images.sh` regenerates on demand); old key purged from git history (`git filter-repo`, force-pushed) and rotated.
 4. **Unforgeable approval gate (next up):** an out-of-band human approval flow — approvals minted server-side (approval endpoint or CLI issuing a signed/opaque token bound to a correlation_id) so `human_approved` can never be asserted by the governed agent. This replaces the request-attribute gate in `decision.rego`.
 5. **Trust-in-the-Loop demo:** connect a commodity agent (Claude Code, Cursor, Aider, Cline) over MCP and demonstrate deny-by-default, approval-gated execution end to end; record the session as demo evidence. Confirm MCP tool-execution parity in the client of choice.
 6. Evidence linkage: `submit_evidence` should validate the correlation_id against a previously issued (and allowed) work order.
