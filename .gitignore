@@ -28,3 +28,4 @@ venv/
 # go build cache
 .gocache/
 .gomodcache/
+tools/approve/approve
