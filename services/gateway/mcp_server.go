@@ -205,9 +205,9 @@ func handleRequestWorkOrder(ctx context.Context, request mcp.CallToolRequest) (*
 
 	approvalStatus := ""
 	if policyDecision.Decision == "deny" && approval == nil && requiresHumanApproval(reqObj) {
-		if err := recordPendingApproval(correlationID, reqObj); err == nil {
-			approvalStatus = "pending"
-			policyDecision.Rationale = append(policyDecision.Rationale, approvalPendingRationale(correlationID))
+		if status, item := approvalDenyFeedback(correlationID, reqObj); status != "" {
+			approvalStatus = status
+			policyDecision.Rationale = append(policyDecision.Rationale, item)
 		}
 	}
 
@@ -248,12 +248,22 @@ func handleRequestWorkOrder(ctx context.Context, request mcp.CallToolRequest) (*
 		"event_id":       decisionTrace.EventID,
 		"trace_id":       traceID,
 	}
-	if approvalStatus == "pending" {
-		result["approval_status"] = "pending"
-		result["approval_instructions"] = fmt.Sprintf(
-			"A human must grant this out-of-band: ./scripts/approve.sh grant %s — then retry request_work_order with this correlation_id. Do not attempt to approve it yourself.",
-			correlationID,
-		)
+	if approvalStatus != "" {
+		result["approval_status"] = approvalStatus
+		switch approvalStatus {
+		case "pending":
+			result["approval_instructions"] = fmt.Sprintf(
+				"A human must grant this out-of-band: ./scripts/approve.sh grant %s — then retry request_work_order with this correlation_id. Do not attempt to approve it yourself.",
+				correlationID,
+			)
+		case "expired":
+			result["approval_instructions"] = fmt.Sprintf(
+				"The human grant expired before it was used. A human can re-grant it: ./scripts/approve.sh grant %s — then retry promptly with this correlation_id.",
+				correlationID,
+			)
+		default:
+			result["approval_instructions"] = "This work order cannot be revived. Request a new work order (fresh correlation_id) for this task."
+		}
 	}
 	if approval != nil {
 		result["approval_status"] = "consumed"

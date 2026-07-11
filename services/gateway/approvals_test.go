@@ -245,6 +245,92 @@ func TestMCPRejectsTrustReservedAttributes(t *testing.T) {
 	}
 }
 
+func TestApprovalDenyFeedbackReportsTrueState(t *testing.T) {
+	t.Setenv("APPROVALS_DIR", t.TempDir())
+	req := prodDeployRequest()
+	correlationID := "corr-" + randomHex(8)
+
+	status, item := approvalDenyFeedback(correlationID, req)
+	if status != "pending" || item.Code != "APPROVAL_PENDING" {
+		t.Fatalf("first request should create pending, got %q/%q", status, item.Code)
+	}
+
+	// Grant with an already-lapsed TTL — the live-demo failure mode.
+	grantForTest(t, correlationID, "user:will", -time.Minute)
+	if got := consumeApproval(correlationID, req); got != nil {
+		t.Fatal("expired grant must not consume")
+	}
+	status, item = approvalDenyFeedback(correlationID, req)
+	if status != "expired" || item.Code != "APPROVAL_EXPIRED" {
+		t.Fatalf("expected expired feedback for lapsed grant, got %q/%q", status, item.Code)
+	}
+
+	// A mismatched request against a live grant reports mismatch.
+	a, _ := readApproval(correlationID)
+	a.ExpiresAt = time.Now().UTC().Add(time.Minute).Format(time.RFC3339)
+	if err := writeApproval(approvalPath(correlationID), a); err != nil {
+		t.Fatal(err)
+	}
+	other := req
+	other.Resource = "service:other"
+	status, item = approvalDenyFeedback(correlationID, other)
+	if status != "mismatch" || item.Code != "APPROVAL_MISMATCH" {
+		t.Fatalf("expected mismatch feedback, got %q/%q", status, item.Code)
+	}
+
+	// After consumption the feedback says consumed, not pending.
+	if got := consumeApproval(correlationID, req); got == nil {
+		t.Fatal("refreshed grant should consume")
+	}
+	status, item = approvalDenyFeedback(correlationID, req)
+	if status != "consumed" || item.Code != "APPROVAL_CONSUMED" {
+		t.Fatalf("expected consumed feedback, got %q/%q", status, item.Code)
+	}
+}
+
+func TestExpiredGrantCanBeRegrantedThenAllows(t *testing.T) {
+	t.Setenv("APPROVALS_DIR", t.TempDir())
+	t.Setenv("OPA_URL", "")
+	t.Setenv("ALLOW_LOCAL_POLICY_FALLBACK", "true")
+
+	first, _, _ := decideProd(t, "", nil)
+	if first.Policy.Decision != "deny" {
+		t.Fatalf("expected initial deny, got %q", first.Policy.Decision)
+	}
+
+	// Grant lapses before the retry: still deny, with expired rationale.
+	grantForTest(t, first.CorrelationID, "user:will", -time.Minute)
+	stale, _, _ := decideProd(t, first.CorrelationID, nil)
+	if stale.Policy.Decision != "allow" {
+		var sawExpired bool
+		for _, item := range stale.Policy.Rationale {
+			if item.Code == "APPROVAL_EXPIRED" {
+				sawExpired = true
+			}
+		}
+		if !sawExpired {
+			t.Fatalf("expected APPROVAL_EXPIRED rationale, got %+v", stale.Policy.Rationale)
+		}
+	} else {
+		t.Fatal("expired grant must not allow")
+	}
+
+	// Human re-grants (simulating the approve CLI on an approved record).
+	a, err := readApproval(first.CorrelationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.ExpiresAt = time.Now().UTC().Add(time.Minute).Format(time.RFC3339)
+	if err := writeApproval(approvalPath(first.CorrelationID), a); err != nil {
+		t.Fatal(err)
+	}
+
+	fresh, _, _ := decideProd(t, first.CorrelationID, nil)
+	if fresh.Policy.Decision != "allow" {
+		t.Fatalf("expected allow after re-grant, got %q (%+v)", fresh.Policy.Decision, fresh.Policy.Rationale)
+	}
+}
+
 func TestMCPApprovalFlowDenyGrantAllow(t *testing.T) {
 	t.Setenv("APPROVALS_DIR", t.TempDir())
 	t.Setenv("OPA_URL", "")

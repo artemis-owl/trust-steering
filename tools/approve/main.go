@@ -142,8 +142,12 @@ func resolve(args []string, status string) error {
 	if err := json.Unmarshal(data, &a); err != nil {
 		return err
 	}
-	if a.Status != "pending" {
-		return fmt.Errorf("record %s is %q, only pending records can be resolved", correlationID, a.Status)
+	// Pending records resolve either way; an approved-but-never-consumed grant
+	// (e.g. expired before use) may be re-granted to refresh its TTL. Denied
+	// and consumed records are immutable.
+	regrant := a.Status == "approved" && status == "approved"
+	if a.Status != "pending" && !regrant {
+		return fmt.Errorf("record %s is %q and cannot be resolved to %q; request a new work order", correlationID, a.Status, status)
 	}
 
 	now := time.Now().UTC()

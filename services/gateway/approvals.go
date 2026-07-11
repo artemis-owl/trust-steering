@@ -176,3 +176,45 @@ func approvalPendingRationale(correlationID string) RationaleItem {
 		Message: fmt.Sprintf("Human approval required and now pending for %s. A human can grant it with: ./scripts/approve.sh grant %s", correlationID, correlationID),
 	}
 }
+
+// approvalDenyFeedback classifies the approval state behind a denied
+// approval-gated request so the caller learns the true remedy — a stale grant
+// must be re-granted, a consumed one needs a fresh work order — instead of a
+// blanket "pending". Records a new pending approval when none exists.
+// Returns an empty status when there is nothing useful to report.
+func approvalDenyFeedback(correlationID string, req Request) (string, RationaleItem) {
+	a, err := readApproval(correlationID)
+	if err != nil {
+		if _, statErr := os.Stat(approvalPath(correlationID) + ".consumed"); statErr == nil {
+			return "consumed", RationaleItem{
+				Code:    "APPROVAL_CONSUMED",
+				Message: fmt.Sprintf("Approval %s was already consumed (single-use). Request a new work order.", correlationID),
+			}
+		}
+		if recErr := recordPendingApproval(correlationID, req); recErr != nil {
+			return "", RationaleItem{}
+		}
+		return "pending", approvalPendingRationale(correlationID)
+	}
+	switch a.Status {
+	case "pending":
+		return "pending", approvalPendingRationale(correlationID)
+	case "approved":
+		if a.Action != req.Action || a.Resource != req.Resource || a.Environment != req.Environment {
+			return "mismatch", RationaleItem{
+				Code:    "APPROVAL_MISMATCH",
+				Message: fmt.Sprintf("Approval %s was granted for %s %s in %s and does not cover this request.", correlationID, a.Action, a.Resource, a.Environment),
+			}
+		}
+		return "expired", RationaleItem{
+			Code:    "APPROVAL_EXPIRED",
+			Message: fmt.Sprintf("Approval by %s expired at %s. A human can re-grant it with: ./scripts/approve.sh grant %s", a.Approver, a.ExpiresAt, correlationID),
+		}
+	case "denied":
+		return "denied", RationaleItem{
+			Code:    "APPROVAL_DENIED",
+			Message: fmt.Sprintf("Approval %s was denied by %s.", correlationID, a.Approver),
+		}
+	}
+	return "", RationaleItem{}
+}

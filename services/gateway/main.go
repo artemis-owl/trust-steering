@@ -185,10 +185,8 @@ func handleDecide(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if policyDecision.Decision == "deny" && approval == nil && requiresHumanApproval(req.Request) {
-		if err := recordPendingApproval(correlationID, req.Request); err != nil {
-			log.Printf("approvals: record pending for %s: %v", correlationID, err)
-		} else {
-			policyDecision.Rationale = append(policyDecision.Rationale, approvalPendingRationale(correlationID))
+		if status, item := approvalDenyFeedback(correlationID, req.Request); status != "" {
+			policyDecision.Rationale = append(policyDecision.Rationale, item)
 		}
 	}
 
