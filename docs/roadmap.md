@@ -35,6 +35,9 @@ These add surface area but do not strengthen the core trust story; pick them up 
 
 - Extend observability: metrics/logs pipelines, Grafana/dashboards—see `docs/reading-plan-6w.md` Week 4+.
 - Streaming parity in Kind (Compose remains the streaming path).
+- **Kind parity is frozen as-is (operator ruling, 2026-07-25):** rehearsal/smoke only, no
+  further investment. Ruled during the helm drift review — the streaming/OTEL/provenance
+  buildout is in-mandate (evidence and audit), kind is the named boundary.
 - Formal specs (`specs/`, TLA+ or similar).
 
 ## Phase 0 — Repo bootstrap (done)
