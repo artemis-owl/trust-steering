@@ -1,6 +1,6 @@
 {
   "roles": {
-    "developer": ["build", "refactor", "deploy", "plan", "review"],
+    "developer": ["build", "refactor", "deploy", "plan", "review", "execute"],
     "architect": ["build", "plan"],
     "engineer": ["build", "refactor", "deploy"],
     "reviewer": ["build", "review"]
