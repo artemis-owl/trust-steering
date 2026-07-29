@@ -20,8 +20,21 @@ The July 2026 audit found that the gateway's trust boundary was self-attested: c
 3. **[DONE 2026-07-09]** Key hygiene: cosign keys untracked and gitignored (`sign_images.sh` regenerates on demand); old key purged from git history (`git filter-repo`, force-pushed) and rotated.
 4. **[DONE 2026-07-09]** Unforgeable approval gate: prod deploys record a server-side pending approval; a human grants via `scripts/approve.sh` (approver identity, TTL); the gateway consumes the grant (single-use, matched to correlation_id + action/resource/environment) and is the only writer of `human_approved`/`approver` in policy input. Covered by gateway tests; flow documented in `docs/mcp.md`.
 5. **Trust-in-the-Loop demo (integration built; evidence session remaining):** the `steering-demo` sibling repo integrates the gateway into a governed project — an approvals-console web UI (the human grant surface) deployed through the gate itself, with an advisory tier (MCP + agent rules) and a physical tier (PreToolUse hook + deploy-script verification of the consumed work order). The full deny → grant-in-console → allow → gated-deploy loop is verified against the real gateway over MCP stdio.
-   - [ ] **Run the demo with a live agent session (Claude Code / Cursor) and record it as demo evidence; then archive `steering-demo`** (operator ruling, 2026-07-23 repo audit — it is a validation vehicle, not a product)
-     - **Status:** `Planned` | **Priority:** *High* | **Project:** [[steering]] | **Source:** `roadmap.md`
+   - [x] **Run the demo with a live agent session (Claude Code / Cursor) and record it as demo evidence; then archive `steering-demo`** (operator ruling, 2026-07-23 repo audit — it is a validation vehicle, not a product)
+     - **Status:** `Completed` | **Priority:** *High* | **Project:** [[steering]] | **Source:** `roadmap.md`
+     - Completed 2026-07-29, live Claude Code session over MCP stdio against the real stack
+       (OPA policy, Redpanda topics, work-order store). Full loop on `corr-7c0d7d79a7243dd6`:
+       request → **deny** (`approval_status: pending`) → agent stopped per rules → operator
+       granted **in the console** (`user:williamcorbett`, 15-min TTL) → retry → **allow**
+       (grant consumed single-use) → `make deploy ENV=prod` verified the consumed record and
+       landed console `84e4761` on :9090 → `submit_evidence` accepted by the new linkage
+       enforcement → audit packet exported (`out/audit-packets/corr-7c0d7d79a7243dd6`).
+       Negative proofs captured live: ungated prod deploy blocked pre-grant (physical tier,
+       exit 2); forged evidence for an unissued correlation_id rejected fail-closed; replay
+       of the consumed grant denied (`approval_status: consumed`). Post-demo
+       `grant-reconcile`: 6 closed grants, 0 unlinked — the demo grant closed in the audit
+       trail. Raw artifacts (all tool responses, deploy transcript, packet copy) captured
+       per the evidence-capture convention. `steering-demo` archived per the ruling.
 6. **Evidence linkage:** `submit_evidence` should validate the correlation_id against a previously issued (and allowed) work order.
    - [x] **Validate `submit_evidence` correlation_id against an issued, allowed work order**
      - **Status:** `Completed` | **Priority:** *High* | **Project:** [[steering]] | **Source:** `roadmap.md`
