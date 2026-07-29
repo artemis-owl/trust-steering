@@ -23,10 +23,28 @@ The July 2026 audit found that the gateway's trust boundary was self-attested: c
    - [ ] **Run the demo with a live agent session (Claude Code / Cursor) and record it as demo evidence; then archive `steering-demo`** (operator ruling, 2026-07-23 repo audit — it is a validation vehicle, not a product)
      - **Status:** `Planned` | **Priority:** *High* | **Project:** [[steering]] | **Source:** `roadmap.md`
 6. **Evidence linkage:** `submit_evidence` should validate the correlation_id against a previously issued (and allowed) work order.
-   - [ ] **Validate `submit_evidence` correlation_id against an issued, allowed work order**
-     - **Status:** `Planned` | **Priority:** *High* | **Project:** [[steering]] | **Source:** `roadmap.md`
-   - [ ] **An issued work order that is never closed is invisible — no grant/evidence reconciliation**
-     - **Status:** `Planned` | **Priority:** *High* | **Project:** [[steering]] | **Source:** `roadmap.md`
+   - [x] **Validate `submit_evidence` correlation_id against an issued, allowed work order**
+     - **Status:** `Completed` | **Priority:** *High* | **Project:** [[steering]] | **Source:** `roadmap.md`
+     - Delivered 2026-07-29 ([helm brief 0003](../../kestrel-helm/briefs/0003-evidence-grant-linkage.md)):
+       issued work orders are recorded server-side (`services/gateway/workorders.go`, one JSON
+       file per correlation_id under `out/workorders/`, the approvals-store pattern) on both the
+       MCP and HTTP `/decide` paths; `submit_evidence` rejects fail-closed unless the
+       correlation_id names an issued work order decided `allow` whose action matches the
+       evidence. Accepted evidence closes the work order (count, first/last time, last result).
+       Seven new gateway tests cover accept, reject-unknown, reject-denied, action-mismatch,
+       malformed-id, `/decide` recording, and the deny→grant→allow retry; full `make test` green.
+   - [x] **An issued work order that is never closed is invisible — no grant/evidence reconciliation**
+     - **Status:** `Completed` | **Priority:** *High* | **Project:** [[steering]] | **Source:** `roadmap.md`
+     - Delivered 2026-07-29 ([helm brief 0003](../../kestrel-helm/briefs/0003-evidence-grant-linkage.md)):
+       `tools/grant-reconcile` joins both topics by correlation_id and reports unclosed grants,
+       unlinked evidence, and identical-task duplicate grants (exit 2 on findings). The dogfood
+       shape is a regression fixture (`main_test.go`). Live re-verification against the real
+       packet: 11 traces / 5 evidence / 9 grants — 5 closed (0 unlinked: the 5/5 core check
+       reconfirmed), **4 unclosed surfaced**: the diagnosed `corr-1f83be18839abb94` (its lost
+       task-1 text recovered from the trace's `context` attribute) *plus three silent grants
+       from the two failed dogfood attempts* (2× 11:53 smoke, 1× 12:36 budget-killed run) —
+       the gap class was systemic, not a one-off. Duplicate-grant detection located the
+       13:40/13:46 pair exactly as diagnosed.
      - Diagnosed 2026-07-29 from the first verification against a *real* evidence packet
        (kestrel-team dogfood `run-1785159637`, not a fixture). The core check passed: 5/5
        evidence events on `decision.evidence.v1` link to allowed work orders on

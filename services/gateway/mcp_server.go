@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -81,7 +82,9 @@ func newMCPServer() *server.MCPServer {
 	submitEvidence := mcp.NewTool("submit_evidence",
 		mcp.WithDescription(
 			"Report task completion or failure for audit. Call this AFTER finishing work. "+
-				"Ties to a previous work order via the correlation_id returned by request_work_order.",
+				"Ties to a previous work order via the correlation_id returned by request_work_order. "+
+				"Rejected unless that work order was issued by this gateway, decided allow, and "+
+				"covers the reported action.",
 		),
 		mcp.WithString("correlation_id",
 			mcp.Required(),
@@ -240,6 +243,13 @@ func handleRequestWorkOrder(ctx context.Context, request mcp.CallToolRequest) (*
 		}
 	}
 
+	// The store is what lets submit_evidence link back to this work order;
+	// if it cannot be written the grant would be unlinkable, so fail closed.
+	if err := recordWorkOrder(decisionTrace); err != nil {
+		span.RecordError(err)
+		return mcp.NewToolResultError(fmt.Sprintf("failed to record work order, not authorized: %v", err)), nil
+	}
+
 	// Build response
 	result := map[string]any{
 		"correlation_id": correlationID,
@@ -306,6 +316,15 @@ func handleSubmitEvidence(ctx context.Context, request mcp.CallToolRequest) (*mc
 		summary = s
 	}
 
+	// Evidence must link to a previously issued, allowed work order covering
+	// the claimed action. Fail-closed: unverifiable submissions are rejected
+	// before anything is published.
+	workOrder, err := validateEvidenceLink(correlationID, action)
+	if err != nil {
+		span.RecordError(err)
+		return mcp.NewToolResultError(fmt.Sprintf("evidence rejected: %v", err)), nil
+	}
+
 	details := map[string]string{}
 	if summary != "" {
 		details["summary"] = summary
@@ -338,6 +357,12 @@ func handleSubmitEvidence(ctx context.Context, request mcp.CallToolRequest) (*mc
 			span.RecordError(err)
 			return mcp.NewToolResultError(fmt.Sprintf("failed to persist evidence event: %v", err)), nil
 		}
+	}
+
+	// The evidence is durable; closure bookkeeping failure must not unrecord it.
+	if err := closeWorkOrder(workOrder, result); err != nil {
+		span.RecordError(err)
+		fmt.Fprintf(os.Stderr, "workorders: record closure of %s: %v\n", correlationID, err)
 	}
 
 	out, _ := json.MarshalIndent(map[string]any{

@@ -25,6 +25,8 @@ if command -v go >/dev/null 2>&1; then
   (cd services/gateway && go test ./... >/dev/null) || fail=1
   echo "- go test services/worker"
   (cd services/worker && go test ./... >/dev/null) || fail=1
+  echo "- go test tools/grant-reconcile"
+  (cd tools/grant-reconcile && go test ./... >/dev/null) || fail=1
   echo "- validate example Decision Trace against Avro"
   validate_schema "schemas/decision_trace.avsc" "schemas/examples/decision_trace.sample.json"
   echo "- validate example Evidence against Avro"

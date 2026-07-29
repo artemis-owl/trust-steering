@@ -222,6 +222,14 @@ func handleDecide(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Evidence–grant linkage: the store is what lets evidence submission
+	// verify this decision was issued. An unrecordable work order would be
+	// unlinkable, so fail closed.
+	if err := recordWorkOrder(decisionTrace); err != nil {
+		http.Error(w, "failed to record work order", http.StatusServiceUnavailable)
+		return
+	}
+
 	writeJSON(w, decisionTrace)
 }
 

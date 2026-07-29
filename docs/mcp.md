@@ -97,6 +97,16 @@ Call **after** a task completes (or fails).
 | `result` | ✅ | Outcome: `ok`, `error`, or `skipped` |
 | `summary` | | Brief description of what happened |
 
+Evidence is **rejected fail-closed** unless the `correlation_id` names a work
+order this gateway issued, the decision was `allow`, and `action` matches the
+action the work order authorized. Issued work orders are recorded server-side
+(one JSON file per correlation_id under `out/workorders/`, anchored by
+`STEERING_ROOT` / `WORKORDERS_DIR` like the approvals store); accepted evidence
+marks the work order closed. An allowed work order that never receives evidence
+stays visible as *issued-and-never-closed* — `tools/grant-reconcile` reports
+both directions (unclosed grants, unlinked evidence) straight from the Kafka
+topics, covering history from before the store existed.
+
 **Returns:**
 ```json
 {

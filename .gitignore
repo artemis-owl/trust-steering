@@ -29,3 +29,4 @@ venv/
 .gocache/
 .gomodcache/
 tools/approve/approve
+tools/grant-reconcile/grant-reconcile
