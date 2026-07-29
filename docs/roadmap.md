@@ -25,21 +25,33 @@ The July 2026 audit found that the gateway's trust boundary was self-attested: c
 6. **Evidence linkage:** `submit_evidence` should validate the correlation_id against a previously issued (and allowed) work order.
    - [ ] **Validate `submit_evidence` correlation_id against an issued, allowed work order**
      - **Status:** `Planned` | **Priority:** *High* | **Project:** [[steering]] | **Source:** `roadmap.md`
-   - [ ] **Unlinked work order from the first real Trust-in-the-Loop verification — 5/6 coverage**
+   - [ ] **An issued work order that is never closed is invisible — no grant/evidence reconciliation**
      - **Status:** `Planned` | **Priority:** *High* | **Project:** [[steering]] | **Source:** `roadmap.md`
-     - Finding, 2026-07-28: the first verification against a *real* evidence packet (kestrel-team
-       dogfood `run-1785159637`, not a fixture) passed its core check — 5/5 evidence events on
-       `decision.evidence.v1` link to allowed work orders on `decision.trace.v1`, and policy
-       history is visible including a `deploy` → deny. **But that run issued six work orders:
-       task-1's `corr-1f83be18839abb94` (13:40:40Z) has no matching evidence event at all.**
-       Determine which side dropped it — a `submit_evidence` call the executor never made
-       (kestrel-team side) or an evidence event lost between gateway and broker (steering side).
-       Reads were done from Redpanda via in-container `rpk` on the internal listener
-       (`localhost:9092`); host-side reads use `127.0.0.1:19092`.
-       This is the concrete motivation for the parent item: with correlation-id validation, an
-       unlinked work order is *detectable* instead of silently absent. Closing charter focus #2
-       (Trust-in-the-Loop) depends on resolving it. Priority proposed by an agent; scope and
-       priority are the operator's to set.
+     - Diagnosed 2026-07-29 from the first verification against a *real* evidence packet
+       (kestrel-team dogfood `run-1785159637`, not a fixture). The core check passed: 5/5
+       evidence events on `decision.evidence.v1` link to allowed work orders on
+       `decision.trace.v1`, policy history visible including a `deploy` → deny.
+       The apparent "5/6 coverage gap" is **not a dropped evidence event**:
+       - Six work orders were issued, but the run's plan had five tasks (`plan_size: 5` in
+         `~/.kestrel/runs.jsonl`), and the five evidence events map 1:1 onto the *last* five
+         work orders, each submitted ~60s after its grant.
+       - `corr-1f83be18839abb94` (13:40:40Z) and `corr-4ea18174e92634df` (13:46:32Z) carry the
+         **same task description** — task 1 was granted twice, ~6 minutes apart. The second
+         grant completed and submitted evidence; the first never closed.
+       - Retention is not a factor: `retention.ms` is 7 days on both topics and every record
+         from the run is inside the window (`decision.trace.v1` log-start 31/HW 42,
+         `decision.evidence.v1` log-start 41/HW 46).
+       - What happened during those six minutes is no longer recoverable — the executor's
+         session logs went with the workspace the wrap-up bug destroyed.
+     - **The gap this exposes:** the trust boundary has no lifecycle for a work order that is
+       issued and never closed. Nothing expires a grant and nothing reconciles issued grants
+       against submitted evidence, so an *allowed action with no recorded outcome* is silently
+       absent from the audit trail. The parent item (validating `correlation_id` on
+       `submit_evidence`) closes the reverse direction — evidence without a grant — and needs
+       this as its companion. Closing charter focus #2 depends on it.
+     - Reads: Redpanda via in-container `rpk` on the internal listener (`localhost:9092`);
+       host-side reads use `127.0.0.1:19092`. Priority proposed by an agent; scope and priority
+       are the operator's to set.
 
 ## Next tasks (after Phase 6)
 
