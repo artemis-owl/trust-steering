@@ -22,7 +22,24 @@ The July 2026 audit found that the gateway's trust boundary was self-attested: c
 5. **Trust-in-the-Loop demo (integration built; evidence session remaining):** the `steering-demo` sibling repo integrates the gateway into a governed project — an approvals-console web UI (the human grant surface) deployed through the gate itself, with an advisory tier (MCP + agent rules) and a physical tier (PreToolUse hook + deploy-script verification of the consumed work order). The full deny → grant-in-console → allow → gated-deploy loop is verified against the real gateway over MCP stdio.
    - [ ] **Run the demo with a live agent session (Claude Code / Cursor) and record it as demo evidence; then archive `steering-demo`** (operator ruling, 2026-07-23 repo audit — it is a validation vehicle, not a product)
      - **Status:** `Planned` | **Priority:** *High* | **Project:** [[steering]] | **Source:** `roadmap.md`
-6. Evidence linkage: `submit_evidence` should validate the correlation_id against a previously issued (and allowed) work order.
+6. **Evidence linkage:** `submit_evidence` should validate the correlation_id against a previously issued (and allowed) work order.
+   - [ ] **Validate `submit_evidence` correlation_id against an issued, allowed work order**
+     - **Status:** `Planned` | **Priority:** *High* | **Project:** [[steering]] | **Source:** `roadmap.md`
+   - [ ] **Unlinked work order from the first real Trust-in-the-Loop verification — 5/6 coverage**
+     - **Status:** `Planned` | **Priority:** *High* | **Project:** [[steering]] | **Source:** `roadmap.md`
+     - Finding, 2026-07-28: the first verification against a *real* evidence packet (kestrel-team
+       dogfood `run-1785159637`, not a fixture) passed its core check — 5/5 evidence events on
+       `decision.evidence.v1` link to allowed work orders on `decision.trace.v1`, and policy
+       history is visible including a `deploy` → deny. **But that run issued six work orders:
+       task-1's `corr-1f83be18839abb94` (13:40:40Z) has no matching evidence event at all.**
+       Determine which side dropped it — a `submit_evidence` call the executor never made
+       (kestrel-team side) or an evidence event lost between gateway and broker (steering side).
+       Reads were done from Redpanda via in-container `rpk` on the internal listener
+       (`localhost:9092`); host-side reads use `127.0.0.1:19092`.
+       This is the concrete motivation for the parent item: with correlation-id validation, an
+       unlinked work order is *detectable* instead of silently absent. Closing charter focus #2
+       (Trust-in-the-Loop) depends on resolving it. Priority proposed by an agent; scope and
+       priority are the operator's to set.
 
 ## Next tasks (after Phase 6)
 
