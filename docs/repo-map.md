@@ -5,7 +5,7 @@ This repository is organized to support incremental, local-only work on **Decisi
 ## Directories
 - `docs/` — reading corpus, roadmap, `runbook.md`, narrative specs, and “audit packet” definition
 - `specs/` — formal specs (optional) for critical invariants/workflows
-- `infra/` — local environment and deployment scaffolding (**Docker Compose** primary stack in `infra/compose/`, kind manifests for parity, k3d/Helm/GitOps later)
+- `infra/` — local environment and deployment scaffolding (**Docker Compose** primary stack in `infra/compose/`, kind manifests for rehearsal-only parity — frozen by decision 2026-07-25; k3d/Helm/GitOps deferred by the same ruling)
 - `services/` — runnable components (gateway and worker)
 - `policies/` — OPA/Rego policies, tests, and policy bundles
 - `schemas/` — message/event schemas and example payloads

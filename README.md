@@ -65,7 +65,7 @@ Compose and kind use OPA in-container; the local process path prefers a host `op
 ## Repo layout (high level)
 - `docs/` reading plan, specs, roadmap, evidence definitions
 - `specs/` formal-ish specs (TLA+ or similar), later
-- `infra/` Docker Compose stack (`infra/compose/`), kind manifests, later k3d/Helm/GitOps
+- `infra/` Docker Compose stack (`infra/compose/`), kind manifests (rehearsal-only, frozen by decision 2026-07-25; k3d/Helm/GitOps deferred by the same ruling)
 - `services/` gateway + worker services
 - `policies/` OPA/Rego policies, tests, bundles
 - `schemas/` event schemas + sample payloads
