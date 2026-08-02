@@ -98,15 +98,17 @@ These add surface area but do not strengthen the core trust story; pick them up 
 - **Kind parity is frozen as-is (operator ruling, 2026-07-25):** rehearsal/smoke only, no
   further investment. Ruled during the helm drift review — the streaming/OTEL/provenance
   buildout is in-mandate (evidence and audit), kind is the named boundary.
-- **Investigate: kind cluster lifecycle hygiene (stub — hygiene, not investment; does not
-  unfreeze parity).** The 2026-07-27 kestrel-helm host audit found two idle kind clusters
+- **Kind cluster lifecycle hygiene — resolved 2026-08-02 (hygiene, not investment; parity
+  stays frozen).** The 2026-07-27 kestrel-helm host audit found two idle kind clusters
   (`steering-control-plane`; `artemis-control-plane` + 2 workers) running for 2+ weeks —
   standing RAM/CPU with no active rehearsal, contrary to the ecosystem's
-  no-trailing-processes discipline (cf. punchcard dormancy, ADR-0008). Investigate:
-  which cluster belongs to what, a teardown/recreate one-liner per cluster
-  (`kind delete cluster` + the existing Make targets) so rehearsal is run-on-demand, and
-  whether the Compose services (OPA/Redpanda/OTEL — now load-bearing for kestrel-team
-  governance since 2026-07-27) should be documented as the *only* standing processes.
+  no-trailing-processes discipline (cf. punchcard dormancy, ADR-0008). **Both deleted
+  2026-08-02** (operator-approved cleanup: `kind delete cluster --name artemis|steering`;
+  `kind get clusters` → "No kind clusters found"). Rehearsal is run-on-demand via
+  `make kind-demo`, which recreates from scratch. Standing-process posture as practiced:
+  the Compose services (OPA/Redpanda/OTEL — load-bearing for kestrel-team governance
+  since 2026-07-27) are the *only* standing processes; evidence topics carry 7-day
+  retention, so exports are point-in-time captures under `out/` (2026-07-31, 2026-08-02).
 - Formal specs (`specs/`, TLA+ or similar).
 
 ## Phase 0 — Repo bootstrap (done)
