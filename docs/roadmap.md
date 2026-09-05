@@ -89,6 +89,55 @@ The July 2026 audit found that the gateway's trust boundary was self-attested: c
 - Policy/schema change gates in CI (tests + short risk note per change); basic CI (build/test/opa/schema checks) landed 2026-07-09.
 - **[DONE]** Implement `scripts/export_audit_packet.sh` per `docs/audit-packet.md`.
 
+### Repo floor (kestrel-helm `decisions/0014`)
+
+The uv-lockfile plank of decision 0014 translates to Go-module hygiene here.
+Landed 2026-09-05: all seven modules aligned to `go 1.24.0` (matching CI's pinned
+Go 1.24), the stray `toolchain go1.24.2` line dropped from `services/gateway`,
+the gateway/worker Dockerfile builder stages moved `golang:1.23` → `golang:1.24`,
+and `CHANGELOG.md` added (retroactive `0.1.0` for the standing substrate, `0.2.0`
+for the alignment). The repo still carries **zero git tags**; `v0.2.0` is the
+operator's to tag on merge.
+
+Findings surfaced while doing that work, filed *proposed* per the standing
+posture — scope and priority are the operator's to set:
+
+- [ ] **`tools/grant-reconcile` is in no CI gate — not built, not tested**
+  - **Status:** `Proposed` | **Priority:** *Medium* | **Project:** [[steering]] | **Source:** `roadmap.md`
+  - CI's "Build tools" step covers four of the five tools (`schema-check`,
+    `kafka-read-one`, `audit-packet-fetch`, `approve`) and omits
+    `grant-reconcile`. CI also runs `go test` only for the two services, so the
+    four tests in `tools/grant-reconcile/main_test.go` — the dogfood-shape
+    regression fixture that backs the Phase 6.6 unclosed-grant check — never
+    run. Of the repo's 30 Go tests, CI executes 26.
+  - This is the likely cause of the directive drift the floor just paid down:
+    `grant-reconcile` was the module furthest ahead (`go 1.25.0`) precisely
+    because nothing gated it. Its `go 1.25.0` → `1.24.0` move is therefore the
+    one directive change in that batch with no build behind it — it pulls
+    `golang.org/x/crypto v0.51.0` (indirect, via `franz-go/pkg/kadm`), and if
+    that module declares a `go` directive above 1.24 the build will fail on the
+    downgrade. Adding the tool to CI both closes the gap and settles this.
+  - Proposed: extend the "Build tools" step to `grant-reconcile`, and run
+    `go test ./...` for tools that have tests.
+- [ ] **Nothing prevents Go-version drift from recurring**
+  - **Status:** `Proposed` | **Priority:** *Low* | **Project:** [[steering]] | **Source:** `roadmap.md`
+  - The Go version is now stated in ten places — seven `go.mod` directives, two
+    Dockerfile builder stages, and `go-version` in `.github/workflows/ci.yml` —
+    with no gate asserting they agree. They had drifted four ways (1.22 / 1.23.0
+    / 1.24.0 / 1.25.0) before 2026-09-05, and the Dockerfiles had drifted a
+    fifth way (1.23) against CI's 1.24.
+  - Proposed: a small CI step (or `scripts/test.sh` check) that reads the pinned
+    version once and fails if any `go.mod` directive or Dockerfile base tag
+    disagrees. Same shape as the existing policy-bundle-hash alignment between
+    Compose and `scripts/kind_deploy.sh`.
+- [ ] **This repo has no release markers**
+  - **Status:** `Proposed` | **Priority:** *Low* | **Project:** [[steering]] | **Source:** `roadmap.md`
+  - `CHANGELOG.md` now exists but the repo has no tags, so audit packets and
+    provenance attestations are anchored to commit SHAs with no human-readable
+    release to cite. Proposed: tag `v0.2.0` on merge of the floor change, decide
+    whether to retro-tag `v0.1.0` at `2dcf795`, and note in
+    `docs/audit-packet.md` which marker a packet should record.
+
 ## Deferred (polish, not proof)
 
 These add surface area but do not strengthen the core trust story; pick them up only after Phase 6:
