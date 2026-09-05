@@ -20,12 +20,17 @@ hygiene in this repo. No policy, schema, or service-behavior change.
 
 ### Changed
 
-- All seven Go modules now declare the same `go 1.24.0` directive, consistent
-  with the Go version CI pins (`.github/workflows/ci.yml`, `go-version: "1.24"`).
-  Previously the directives had drifted four ways: `1.22`
-  (`tools/schema-check`, `tools/approve`, `tools/kafka-read-one`,
+- Six of the seven Go modules now declare the same `go 1.24.0` directive,
+  consistent with the Go version CI pins (`.github/workflows/ci.yml`,
+  `go-version: "1.24"`). Previously the directives had drifted four ways:
+  `1.22` (`tools/schema-check`, `tools/approve`, `tools/kafka-read-one`,
   `services/worker`), `1.23.0` (`services/gateway`), `1.24.0`
   (`tools/audit-packet-fetch`), and `1.25.0` (`tools/grant-reconcile`).
+  **Documented exception:** `tools/grant-reconcile` stays at `go 1.25.0` —
+  its dependency `franz-go/pkg/kadm@v1.18.0` requires go ≥ 1.25.0, so the
+  1.24.0 downgrade fails the build (predicted in the roadmap finding filed by
+  this change, confirmed by attended verification 2026-09-05; the why lives
+  in a comment on the directive itself).
 - `services/gateway/go.mod`: dropped the stray `toolchain go1.24.2` line. It was
   compensating for a `go 1.23.0` directive under a Go 1.24 CI runner; with the
   directive itself at `1.24.0` the line is redundant and was the only

@@ -119,6 +119,13 @@ posture — scope and priority are the operator's to set:
     downgrade. Adding the tool to CI both closes the gap and settles this.
   - Proposed: extend the "Build tools" step to `grant-reconcile`, and run
     `go test ./...` for tools that have tests.
+  - **2026-09-05, attended verification:** the predicted failure is real —
+    `go build` at the 1.24.0 directive fails with
+    `franz-go/pkg/kadm@v1.18.0 requires go >= 1.25.0 (running go 1.24.2)`.
+    Fixed forward on this PR: `grant-reconcile` restored to `go 1.25.0` as a
+    documented load-bearing exception (comment on the directive); build OK and
+    its 4 tests pass at that directive. The CI-gate extension proposed above
+    remains open — it is what would make the exception gated instead of trusted.
 - [ ] **Nothing prevents Go-version drift from recurring**
   - **Status:** `Proposed` | **Priority:** *Low* | **Project:** [[steering]] | **Source:** `roadmap.md`
   - The Go version is now stated in ten places — seven `go.mod` directives, two
