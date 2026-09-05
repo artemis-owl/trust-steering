@@ -1,5 +1,10 @@
 module steering/tools/grant-reconcile
 
+// Load-bearing exception to the repo-wide go 1.24.0 alignment (helm queue
+// 0038): franz-go/pkg/kadm@v1.18.0 requires go >= 1.25.0 — the 1.24.0
+// downgrade fails the build (confirmed attended 2026-09-05). CI does not
+// build this tool yet (docs/roadmap.md, proposed), so keep this directive
+// until either the dep allows 1.24 or CI gates it at 1.25.
 go 1.25.0
 
 require (

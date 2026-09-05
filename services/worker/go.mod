@@ -1,6 +1,6 @@
 module steering/services/worker
 
-go 1.22
+go 1.24.0
 
 require (
 	github.com/twmb/franz-go v1.17.1

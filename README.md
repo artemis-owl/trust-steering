@@ -18,6 +18,7 @@ The Steering Control Plane provides a local-first reference architecture for **E
 - Repo map: `docs/repo-map.md`
 - 6‑week reading + build plan: `docs/reading-plan-6w.md`
 - Roadmap: `docs/roadmap.md`
+- Changelog: `CHANGELOG.md`
 - Corpus index (NIST-led): `docs/corpus.md`
 - Control map (AI RMF outcomes): `docs/control-map.md`
 
