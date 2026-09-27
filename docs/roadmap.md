@@ -4,6 +4,10 @@ This roadmap is organized around one anchor demo (“Decision Trace Gateway”) 
 
 ## Current state (as of July 2026)
 
+> **Status (grooming pass 2026-09-27):** Phase 6 is complete (items 1–6 done by
+> 2026-07-29); the repo floor (kestrel-helm `decisions/0014`) is tagged `v0.2.0`
+> (2026-09-05). What remains open is the `Proposed`/`Planned` items below.
+
 - **Primary local runtime:** Docker Compose stack (`infra/compose/`, `make compose-up`) — OPA, gateway, worker, pinned images, loopback-only ports, policy bundle hash aligned with `scripts/kind_deploy.sh`.
 - **MCP surface (built):** the gateway embeds an MCP server (`gateway --mcp`) exposing `request_work_order`, `submit_evidence`, and `get_policy_status`; see `docs/mcp.md`. End-to-end validation with a commodity agent client is Phase 6 work.
 - **Streaming (Phase 2 slice):** With `COMPOSE_PROFILES=stream`, Redpanda runs and `compose_up.sh` sets `KAFKA_BOOTSTRAP_SERVERS=redpanda:9092` for gateway/worker. Gateway produces JSON to `decision.trace.v1`; worker consumes and produces evidence JSON to `decision.evidence.v1`. Without `KAFKA_BOOTSTRAP_SERVERS`, behavior stays HTTP-only. Integration check: `scripts/test_stream.sh` (Docker + broker).
@@ -11,7 +15,7 @@ This roadmap is organized around one anchor demo (“Decision Trace Gateway”) 
 - **Kubernetes parity:** Kind cluster + `scripts/kind_deploy.sh` / `make kind-demo` for periodic smoke and manifest-shaped deploys (streaming not wired in Kind yet, but observability tracing parity is achieved).
 - Schemas, policy-as-code, Go services, schema checks in `scripts/test.sh`, CI (`.github/workflows/ci.yml`), and AI RMF–anchored control map (`docs/control-map.md`).
 
-## Phase 6 — Trust hardening + agent integration (current focus)
+## Phase 6 — Trust hardening + agent integration (done 2026-07-29)
 
 The July 2026 audit found that the gateway's trust boundary was self-attested: callers could assert their own role and approval flags, and audit events could be silently dropped on broker failure. Fixing that credibly *is* the product. In priority order:
 
@@ -19,7 +23,7 @@ The July 2026 audit found that the gateway's trust boundary was self-attested: c
 2. **[DONE 2026-07-09]** Non-spoofable MCP subject: role/identity come from gateway configuration (`MCP_SUBJECT_ROLE`, `MCP_AGENT_ID`); trust-reserved attributes (`role`, `agent_id`, `human_approved`) are rejected from client input.
 3. **[DONE 2026-07-09]** Key hygiene: cosign keys untracked and gitignored (`sign_images.sh` regenerates on demand); old key purged from git history (`git filter-repo`, force-pushed) and rotated.
 4. **[DONE 2026-07-09]** Unforgeable approval gate: prod deploys record a server-side pending approval; a human grants via `scripts/approve.sh` (approver identity, TTL); the gateway consumes the grant (single-use, matched to correlation_id + action/resource/environment) and is the only writer of `human_approved`/`approver` in policy input. Covered by gateway tests; flow documented in `docs/mcp.md`.
-5. **Trust-in-the-Loop demo (integration built; evidence session remaining):** the `steering-demo` sibling repo integrates the gateway into a governed project — an approvals-console web UI (the human grant surface) deployed through the gate itself, with an advisory tier (MCP + agent rules) and a physical tier (PreToolUse hook + deploy-script verification of the consumed work order). The full deny → grant-in-console → allow → gated-deploy loop is verified against the real gateway over MCP stdio.
+5. **[DONE 2026-07-29]** **Trust-in-the-Loop demo (integration built; evidence session remaining):** the `steering-demo` sibling repo integrates the gateway into a governed project — an approvals-console web UI (the human grant surface) deployed through the gate itself, with an advisory tier (MCP + agent rules) and a physical tier (PreToolUse hook + deploy-script verification of the consumed work order). The full deny → grant-in-console → allow → gated-deploy loop is verified against the real gateway over MCP stdio.
    - [x] **Run the demo with a live agent session (Claude Code / Cursor) and record it as demo evidence; then archive `steering-demo`** (operator ruling, 2026-07-23 repo audit — it is a validation vehicle, not a product)
      - **Status:** `Completed` | **Priority:** *High* | **Project:** [[steering]] | **Source:** `roadmap.md`
      - Completed 2026-07-29, live Claude Code session over MCP stdio against the real stack
@@ -35,7 +39,7 @@ The July 2026 audit found that the gateway's trust boundary was self-attested: c
        `grant-reconcile`: 6 closed grants, 0 unlinked — the demo grant closed in the audit
        trail. Raw artifacts (all tool responses, deploy transcript, packet copy) captured
        per the evidence-capture convention. `steering-demo` archived per the ruling.
-6. **Evidence linkage:** `submit_evidence` should validate the correlation_id against a previously issued (and allowed) work order.
+6. **[DONE 2026-07-29]** **Evidence linkage:** `submit_evidence` should validate the correlation_id against a previously issued (and allowed) work order.
    - [x] **Validate `submit_evidence` correlation_id against an issued, allowed work order**
      - **Status:** `Completed` | **Priority:** *High* | **Project:** [[steering]] | **Source:** `roadmap.md`
      - Delivered 2026-07-29 ([helm brief 0003](../../kestrel-helm/briefs/0003-evidence-grant-linkage.md)):
@@ -86,7 +90,7 @@ The July 2026 audit found that the gateway's trust boundary was self-attested: c
 
 ## Next tasks (after Phase 6)
 
-- Policy/schema change gates in CI (tests + short risk note per change); basic CI (build/test/opa/schema checks) landed 2026-07-09.
+- Policy/schema change gates in CI (tests + short risk note per change); basic CI (build/test/opa/schema checks) landed 2026-07-09. *(Tracked as the Phase 5 item "Add change gates and lightweight risk notes".)*
 - **[DONE]** Implement `scripts/export_audit_packet.sh` per `docs/audit-packet.md`.
 
 ### Repo floor (kestrel-helm `decisions/0014`)
@@ -144,13 +148,15 @@ posture — scope and priority are the operator's to set:
     release to cite. Proposed: tag `v0.2.0` on merge of the floor change, decide
     whether to retro-tag `v0.1.0` at `2dcf795`, and note in
     `docs/audit-packet.md` which marker a packet should record.
+  - **Status note (2026-09-27):** `v0.2.0` is tagged (`6658d1d`, 2026-09-05). What remains
+    is the retro-tag `v0.1.0` decision and the `docs/audit-packet.md` note.
 
 ## Deferred (polish, not proof)
 
 These add surface area but do not strengthen the core trust story; pick them up only after Phase 6:
 
-- Extend observability: metrics/logs pipelines, Grafana/dashboards—see `docs/reading-plan-6w.md` Week 4+.
-- Streaming parity in Kind (Compose remains the streaming path).
+- Extend observability: metrics/logs pipelines, Grafana/dashboards—see `docs/reading-plan-6w.md` Week 4+. *(Tracked as the Phase 3 item "Observability further work".)*
+- Streaming parity in Kind (Compose remains the streaming path). *(Superseded by the Kind freeze below, 2026-07-25.)*
 - **Kind parity is frozen as-is (operator ruling, 2026-07-25):** rehearsal/smoke only, no
   further investment. Ruled during the helm drift review — the streaming/OTEL/provenance
   buildout is in-mandate (evidence and audit), kind is the named boundary.
