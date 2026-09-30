@@ -107,7 +107,8 @@ Findings surfaced while doing that work, filed *proposed* per the standing
 posture — scope and priority are the operator's to set:
 
 - [ ] **`tools/grant-reconcile` is in no CI gate — not built, not tested**
-  - **Status:** `Proposed` | **Priority:** *Medium* | **Project:** [[steering]] | **Source:** `roadmap.md`
+  - **Status:** `Proposed` | **Priority:** *Parked* (was *Medium*; operator ruling 2026-09-30, kestrel-helm priority list P7) | **Project:** [[steering]] | **Source:** `roadmap.md`
+  - **Parked (operator ruling 2026-09-30, P7):** trigger — the grant-reconciliation story gets an artemis runway slot; fix the CI step before that story is published, since it rests on this tool's regression fixture.
   - CI's "Build tools" step covers four of the five tools (`schema-check`,
     `kafka-read-one`, `audit-packet-fetch`, `approve`) and omits
     `grant-reconcile`. CI also runs `go test` only for the two services, so the
