@@ -108,6 +108,6 @@ The repo carries no git tags yet. `v0.2.0` is tagged by the operator on merge;
 (`2dcf795`) or left untagged — until then the links below resolve only once the
 corresponding tags exist.
 
-[Unreleased]: https://github.com/wcorbett36/trust-steering/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/wcorbett36/trust-steering/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/wcorbett36/trust-steering/releases/tag/v0.1.0
+[Unreleased]: https://github.com/artemis-owl/trust-steering/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/artemis-owl/trust-steering/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/artemis-owl/trust-steering/releases/tag/v0.1.0
