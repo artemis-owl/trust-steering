@@ -127,6 +127,23 @@ func isTrustReservedAttribute(key string) bool {
 	return false
 }
 
+// traceClassifications are the data_classification values the decision
+// trace schema admits (schemas/decision_trace.avsc).
+var traceClassifications = map[string]bool{"public": true, "internal": true, "confidential": true, "restricted": true}
+
+// traceDataClassification is the caller's declared data_classification when
+// it is a schema value, else "internal".
+func traceDataClassification(attrs map[string]string) string {
+	if c := attrs["data_classification"]; traceClassifications[c] {
+		return c
+	}
+	return "internal"
+}
+
+// mcpTraceObserver, when set (tests only), sees each decision trace built by
+// request_work_order.
+var mcpTraceObserver func(DecisionTrace)
+
 func handleRequestWorkOrder(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, span := otel.Tracer("steering.mcp").Start(ctx, "mcp.request_work_order")
 	defer span.End()
@@ -227,9 +244,13 @@ func handleRequestWorkOrder(ctx context.Context, request mcp.CallToolRequest) (*
 		Subject:            subject,
 		Request:            reqObj,
 		Policy:             policyDecision,
-		DataClassification: "internal",
+		DataClassification: traceDataClassification(reqObj.Attributes),
 		PiiFlags:           []string{},
 		EvidenceRefs:       []string{},
+	}
+
+	if mcpTraceObserver != nil {
+		mcpTraceObserver(decisionTrace)
 	}
 
 	// When a broker is configured, failure to persist the trace must fail the

@@ -49,6 +49,8 @@ Call **before** starting a significant task.
 | `attributes` | | JSON object of string attributes (e.g. `{"tests_passed":"true"}`). Trust-reserved keys (`role`, `agent_id`, `human_approved`) are rejected — identity comes from gateway config and approvals from the server-side store |
 | `correlation_id` | | Only for retrying after a human granted a pending approval (see [Human approval flow](#human-approval-flow)) |
 
+**Inference.** For `action: "inference"` the `resource` is the route — the served model name the consumer will call. The route `local` is the on-machine route and is allowed for any data classification. Any other route leaves the machine, and `attributes.data_classification` decides whether it is allowed: only `public` or `internal` may use it; `confidential`, `restricted`, a missing value, or anything else is denied (`DENY_INFERENCE_OFFSITE`, use `local`). The declared classification (when one of `public`, `internal`, `confidential`, `restricted`) is recorded as the decision trace's `data_classification`. Steering only decides: the consumer makes the call itself and reports it with `submit_evidence`.
+
 **Returns:**
 ```json
 {

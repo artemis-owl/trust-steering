@@ -208,4 +208,36 @@ func TestActionAllowedForRoleCustomConfigFile(t *testing.T) {
 	}
 }
 
-
+// Same six inputs as the inference tests in policies/opa/tests/decision_test.rego,
+// so the local fallback and OPA cannot disagree.
+func TestEvaluatePolicyLocalInference(t *testing.T) {
+	cases := []struct {
+		name          string
+		role          string
+		route         string
+		attributes    map[string]string
+		wantDecision  string
+		wantFirstCode string
+	}{
+		{"confidential_offsite_denied", "developer", "claude-sonnet", map[string]string{"data_classification": "confidential"}, "deny", "DENY_INFERENCE_OFFSITE"},
+		{"confidential_local_allowed", "developer", "local", map[string]string{"data_classification": "confidential"}, "allow", "ALLOW_INFERENCE_LOCAL"},
+		{"internal_offsite_allowed", "developer", "claude-sonnet", map[string]string{"data_classification": "internal"}, "allow", "ALLOW_INFERENCE_OFFSITE"},
+		{"unclassified_offsite_denied", "developer", "claude-sonnet", map[string]string{}, "deny", "DENY_INFERENCE_OFFSITE"},
+		{"unknown_classification_offsite_denied", "developer", "claude-sonnet", map[string]string{"data_classification": "secret-ish"}, "deny", "DENY_INFERENCE_OFFSITE"},
+		{"role_without_it_denied", "reviewer", "local", map[string]string{"data_classification": "public"}, "deny", "DEFAULT_DENY"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := evaluatePolicyLocal(
+				Subject{ID: "user:test", Attributes: map[string]string{"role": tc.role}},
+				Request{Action: "inference", Resource: tc.route, Environment: "dev", Attributes: tc.attributes},
+			)
+			if got.Decision != tc.wantDecision {
+				t.Errorf("decision = %q, want %q", got.Decision, tc.wantDecision)
+			}
+			if len(got.Rationale) == 0 || got.Rationale[0].Code != tc.wantFirstCode {
+				t.Errorf("rationale = %+v, want first code %q", got.Rationale, tc.wantFirstCode)
+			}
+		})
+	}
+}

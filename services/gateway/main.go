@@ -362,6 +362,11 @@ func actionAllowedForRole(role, action string) bool {
 	return false
 }
 
+// offsiteClassifications are the declared data classifications that may use
+// an inference route off the machine. Mirrors offsite_classifications in
+// policies/opa/rego/decision.rego.
+var offsiteClassifications = map[string]bool{"public": true, "internal": true}
+
 func evaluatePolicyLocal(subject Subject, request Request) PolicyDecision {
 	allow := false
 	rationale := []RationaleItem{{Code: "DEFAULT_DENY", Message: "Denied by default."}}
@@ -369,7 +374,21 @@ func evaluatePolicyLocal(subject Subject, request Request) PolicyDecision {
 	role := subject.Attributes["role"]
 
 	if actionAllowedForRole(role, request.Action) {
-		if request.Action == "deploy" {
+		if request.Action == "inference" {
+			// Same rule as decision.rego: the resource is the route; "local"
+			// never leaves the machine, any other route needs a public or
+			// internal classification.
+			route := request.Resource
+			if route == "local" {
+				allow = true
+				rationale = []RationaleItem{{Code: "ALLOW_INFERENCE_LOCAL", Message: "Inference on the local route permitted; data does not leave the machine."}}
+			} else if classification := request.Attributes["data_classification"]; offsiteClassifications[classification] {
+				allow = true
+				rationale = []RationaleItem{{Code: "ALLOW_INFERENCE_OFFSITE", Message: fmt.Sprintf("Inference on route '%s' permitted for data classified '%s'.", route, classification)}}
+			} else {
+				rationale = []RationaleItem{{Code: "DENY_INFERENCE_OFFSITE", Message: fmt.Sprintf("Inference on route '%s' leaves the machine and is not permitted for this data classification (only public or internal may leave); use the local route.", route)}}
+			}
+		} else if request.Action == "deploy" {
 			if request.Environment == "dev" && request.Attributes["tests_passed"] == "true" {
 				allow = true
 				rationale = []RationaleItem{{Code: "ALLOW_DEPLOY_DEV", Message: "Dev deploy permitted because tests passed."}}
