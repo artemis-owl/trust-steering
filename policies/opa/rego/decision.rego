@@ -15,6 +15,7 @@ action_allowed_for_role(role, action) if {
 allow if {
     action := input.request.action
     action != "deploy"
+    action != "inference"
     action_allowed_for_role(input.subject.attributes.role, action)
 }
 
@@ -34,10 +35,31 @@ allow if {
     action_allowed_for_role(input.subject.attributes.role, "deploy")
 }
 
+# Inference: the resource is the route (a served model name). The "local"
+# route never leaves the machine; any other route is off the machine and is
+# permitted only for these declared data classifications. A missing or
+# unknown classification is not permitted off the machine.
+offsite_classifications := {"public", "internal"}
+
+inference_route_permitted if {
+    input.request.resource == "local"
+}
+
+inference_route_permitted if {
+    input.request.attributes.data_classification in offsite_classifications
+}
+
+allow if {
+    input.request.action == "inference"
+    action_allowed_for_role(input.subject.attributes.role, "inference")
+    inference_route_permitted
+}
+
 # Rationale for simple actions
 rationale := [{"code": "ALLOW_ACTION", "message": sprintf("Action '%s' permitted for role '%s'.", [input.request.action, input.subject.attributes.role])}] if {
     action := input.request.action
     action != "deploy"
+    action != "inference"
     action_allowed_for_role(input.subject.attributes.role, action)
 }
 
@@ -55,6 +77,29 @@ rationale := [{"code": "ALLOW_DEPLOY_PROD", "message": "Prod deploy permitted by
     input.request.environment == "prod"
     input.request.attributes.human_approved == "true"
     action_allowed_for_role(input.subject.attributes.role, "deploy")
+}
+
+# Rationale for inference on the local route
+rationale := [{"code": "ALLOW_INFERENCE_LOCAL", "message": "Inference on the local route permitted; data does not leave the machine."}] if {
+    input.request.action == "inference"
+    action_allowed_for_role(input.subject.attributes.role, "inference")
+    input.request.resource == "local"
+}
+
+# Rationale for inference on an off-machine route that the classification permits
+rationale := [{"code": "ALLOW_INFERENCE_OFFSITE", "message": sprintf("Inference on route '%s' permitted for data classified '%s'.", [input.request.resource, input.request.attributes.data_classification])}] if {
+    input.request.action == "inference"
+    action_allowed_for_role(input.subject.attributes.role, "inference")
+    input.request.resource != "local"
+    inference_route_permitted
+}
+
+# Rationale for inference on an off-machine route that the classification forbids
+rationale := [{"code": "DENY_INFERENCE_OFFSITE", "message": sprintf("Inference on route '%s' leaves the machine and is not permitted for this data classification (only public or internal may leave); use the local route.", [input.request.resource])}] if {
+    input.request.action == "inference"
+    action_allowed_for_role(input.subject.attributes.role, "inference")
+    input.request.resource != "local"
+    not inference_route_permitted
 }
 
 decision := {

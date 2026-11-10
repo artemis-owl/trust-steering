@@ -211,3 +211,23 @@ func TestApprovalRetryUpdatesWorkOrderDecision(t *testing.T) {
 		t.Fatalf("evidence for the granted work order must be accepted: %s", toolText(t, res))
 	}
 }
+
+func TestRequestWorkOrderInferenceTraceCarriesDeclaredClassification(t *testing.T) {
+	linkageEnv(t)
+
+	var traces []DecisionTrace
+	mcpTraceObserver = func(tr DecisionTrace) { traces = append(traces, tr) }
+	t.Cleanup(func() { mcpTraceObserver = nil })
+
+	issueWorkOrder(t, map[string]any{
+		"action":     "inference",
+		"resource":   "local",
+		"attributes": `{"data_classification":"confidential"}`,
+	})
+	if len(traces) != 1 {
+		t.Fatalf("expected one decision trace, got %d", len(traces))
+	}
+	if got := traces[0].DataClassification; got != "confidential" {
+		t.Fatalf("trace data_classification = %q, want %q", got, "confidential")
+	}
+}
