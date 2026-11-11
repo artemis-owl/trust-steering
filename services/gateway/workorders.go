@@ -29,6 +29,7 @@ type WorkOrder struct {
 	Decision      string `json:"decision"` // allow | deny
 	IssuedAt      string `json:"issued_at"`
 	EventID       string `json:"event_id"`
+	TraceID       string `json:"trace_id,omitempty"`
 	// Closure bookkeeping, written when evidence is accepted. A work order
 	// with Decision "allow" and EvidenceCount 0 is issued-and-never-closed —
 	// exactly the state reconciliation must surface, never silently drop.
@@ -101,6 +102,7 @@ func recordWorkOrder(trace DecisionTrace) error {
 	w.Decision = trace.Policy.Decision
 	w.IssuedAt = trace.EventTime
 	w.EventID = trace.EventID
+	w.TraceID = trace.TraceID
 	return writeWorkOrder(w)
 }
 

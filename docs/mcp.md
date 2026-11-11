@@ -108,6 +108,8 @@ marks the work order closed. An allowed work order that never receives evidence
 stays visible as *issued-and-never-closed* — `tools/grant-reconcile` reports
 both directions (unclosed grants, unlinked evidence) straight from the Kafka
 topics, covering history from before the store existed.
+The recorded evidence carries the work order's `trace_id` and its policy
+decision (`details.policy_decision`), so it joins the decision trace it closes.
 
 **Returns:**
 ```json
