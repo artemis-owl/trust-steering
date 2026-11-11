@@ -144,6 +144,10 @@ func traceDataClassification(attrs map[string]string) string {
 // request_work_order.
 var mcpTraceObserver func(DecisionTrace)
 
+// mcpEvidenceObserver, when set (tests only), sees each evidence event built
+// by submit_evidence, before it is published.
+var mcpEvidenceObserver func(EvidenceEvent)
+
 func handleRequestWorkOrder(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, span := otel.Tracer("steering.mcp").Start(ctx, "mcp.request_work_order")
 	defer span.End()
@@ -346,9 +350,14 @@ func handleSubmitEvidence(ctx context.Context, request mcp.CallToolRequest) (*mc
 		return mcp.NewToolResultError(fmt.Sprintf("evidence rejected: %v", err)), nil
 	}
 
-	details := map[string]string{}
+	details := map[string]string{"policy_decision": workOrder.Decision}
 	if summary != "" {
 		details["summary"] = summary
+	}
+	traceID := workOrder.TraceID
+	if traceID == "" {
+		// A work order stored before trace ids were kept.
+		traceID = randomHex(16)
 	}
 
 	evidence := EvidenceEvent{
@@ -356,7 +365,7 @@ func handleSubmitEvidence(ctx context.Context, request mcp.CallToolRequest) (*mc
 		EventID:       randomHex(16),
 		EventTime:     time.Now().UTC().Format(time.RFC3339Nano),
 		CorrelationID: correlationID,
-		TraceID:       randomHex(16),
+		TraceID:       traceID,
 		EvidenceType:  "action.executed",
 		Action:        action,
 		Result:        result,
@@ -364,6 +373,10 @@ func handleSubmitEvidence(ctx context.Context, request mcp.CallToolRequest) (*mc
 		Workload: WorkloadIdentity{
 			ServiceName: "mcp-client",
 		},
+	}
+
+	if mcpEvidenceObserver != nil {
+		mcpEvidenceObserver(evidence)
 	}
 
 	// When a broker is configured, evidence must be durable before we report it recorded.

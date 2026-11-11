@@ -231,3 +231,42 @@ func TestRequestWorkOrderInferenceTraceCarriesDeclaredClassification(t *testing.
 		t.Fatalf("trace data_classification = %q, want %q", got, "confidential")
 	}
 }
+
+func TestSubmitEvidenceJoinsTheDecisionTrace(t *testing.T) {
+	linkageEnv(t)
+
+	var traces []DecisionTrace
+	var evidence []EvidenceEvent
+	mcpTraceObserver = func(tr DecisionTrace) { traces = append(traces, tr) }
+	mcpEvidenceObserver = func(ev EvidenceEvent) { evidence = append(evidence, ev) }
+	t.Cleanup(func() {
+		mcpTraceObserver = nil
+		mcpEvidenceObserver = nil
+	})
+
+	issued := issueWorkOrder(t, map[string]any{
+		"action":     "inference",
+		"resource":   "local",
+		"attributes": `{"data_classification":"confidential"}`,
+	})
+	if issued["decision"] != "allow" {
+		t.Fatalf("expected allow, got %+v", issued)
+	}
+	res := callTool(t, handleSubmitEvidence, map[string]any{
+		"correlation_id": issued["correlation_id"],
+		"action":         "inference",
+		"result":         "ok",
+	})
+	if res.IsError {
+		t.Fatalf("submit_evidence failed: %s", toolText(t, res))
+	}
+	if len(traces) != 1 || len(evidence) != 1 {
+		t.Fatalf("expected one trace and one evidence event, got %d and %d", len(traces), len(evidence))
+	}
+	if evidence[0].TraceID != traces[0].TraceID {
+		t.Fatalf("evidence trace_id = %q, want decision trace's %q", evidence[0].TraceID, traces[0].TraceID)
+	}
+	if got := evidence[0].Details["policy_decision"]; got != "allow" {
+		t.Fatalf("evidence details.policy_decision = %q, want %q", got, "allow")
+	}
+}
