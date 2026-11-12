@@ -123,11 +123,18 @@ func runKafkaConsumer(ctx context.Context, cl *kgo.Client) {
 				attribute.String("policy.decision", strings.ToLower(trace.Policy.Decision)),
 			)
 
-			ev, err := traceToEvidence(trace)
+			ev, publish, err := evidenceForConsumedTrace(trace)
 			if err != nil {
 				span.RecordError(err)
 				span.SetStatus(codes.Error, "trace to evidence")
 				log.Printf("kafka: skip trace %s: %v", trace.CorrelationID, err)
+				commit()
+				return
+			}
+			if !publish {
+				// The work order's consumer executes it and reports its own
+				// evidence; the worker publishes nothing.
+				span.SetAttributes(attribute.String("steering.executor", "consumer"))
 				commit()
 				return
 			}

@@ -123,6 +123,27 @@ func handleExecute(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, evidence)
 }
 
+// consumerExecutes reports whether the trace belongs to a work order whose
+// consumer executes it (an MCP request_work_order). The consumer reports the
+// outcome itself with submit_evidence, so the worker must not.
+func consumerExecutes(trace DecisionTrace) bool {
+	return trace.Request.Attributes["executor"] == "consumer"
+}
+
+// evidenceForConsumedTrace maps a trace read off the decision-trace topic to
+// the evidence the worker publishes for it. The bool is false when the worker
+// publishes nothing: the work order is executed by its consumer.
+func evidenceForConsumedTrace(trace DecisionTrace) (EvidenceEvent, bool, error) {
+	if consumerExecutes(trace) {
+		return EvidenceEvent{}, false, nil
+	}
+	ev, err := traceToEvidence(trace)
+	if err != nil {
+		return EvidenceEvent{}, false, err
+	}
+	return ev, true, nil
+}
+
 func traceToEvidence(trace DecisionTrace) (EvidenceEvent, error) {
 	if err := validateTrace(trace); err != nil {
 		return EvidenceEvent{}, err

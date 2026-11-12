@@ -109,3 +109,49 @@ func TestHandleExecuteRecordsSpanAttributes(t *testing.T) {
 		t.Fatalf("expected steering.correlation_id on a span, got %d spans", len(ended))
 	}
 }
+
+func consumedTraceFixture(attrs map[string]string) DecisionTrace {
+	return DecisionTrace{
+		SchemaVersion: "0.1.0",
+		EventID:       "evt-1",
+		EventTime:     "2026-11-11T00:00:00Z",
+		CorrelationID: "corr-f7d3e7961088a78d",
+		TraceID:       "4bf92f3577b34da6a3ce929d0e0e4736",
+		Subject:       Subject{Type: "agent", ID: "agent:consumer"},
+		Request: Request{
+			Action:      "inference",
+			Resource:    "model:default",
+			Environment: "dev",
+			Attributes:  attrs,
+		},
+		Policy: PolicyDecision{Engine: "opa", BundleHash: "sha256:test-policy", Decision: "allow"},
+	}
+}
+
+func TestWorkerLeavesConsumerExecutedWorkOrdersAlone(t *testing.T) {
+	trace := consumedTraceFixture(map[string]string{"executor": "consumer"})
+	ev, publish, err := evidenceForConsumedTrace(trace)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if publish {
+		t.Fatalf("worker must publish no evidence for a consumer-executed work order, got %#v", ev)
+	}
+}
+
+func TestWorkerStillExecutesItsOwnWorkOrders(t *testing.T) {
+	trace := consumedTraceFixture(nil)
+	ev, publish, err := evidenceForConsumedTrace(trace)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !publish {
+		t.Fatalf("worker must publish evidence for a trace without executor")
+	}
+	if ev.EvidenceType != "action.executed" || ev.Result != "ok" {
+		t.Fatalf("unexpected evidence outcome: %#v", ev)
+	}
+	if ev.CorrelationID != trace.CorrelationID {
+		t.Fatalf("correlation id not preserved: %#v", ev)
+	}
+}

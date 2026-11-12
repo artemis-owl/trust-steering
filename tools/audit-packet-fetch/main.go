@@ -65,7 +65,10 @@ func main() {
 
 	var decisionBytes, evidenceBytes []byte
 
-	for decisionBytes == nil || evidenceBytes == nil {
+	// A denied work order executed by its consumer has no evidence: the
+	// consumer was refused and the worker leaves it alone. Its evidence file
+	// is written empty.
+	for decisionBytes == nil || (evidenceBytes == nil && evidenceExpected(decisionBytes)) {
 		if ctx.Err() != nil {
 			fmt.Fprintln(os.Stderr, "timeout waiting for decision trace and evidence for correlation_id")
 			os.Exit(1)
@@ -99,6 +102,26 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+// evidenceExpected reports whether a decision trace will be followed by an
+// evidence record. It is false only for a denied work order whose consumer
+// executes it (request.attributes.executor == "consumer"); input that does not
+// parse is treated as expecting evidence.
+func evidenceExpected(decision []byte) bool {
+	var tr struct {
+		Request struct {
+			Attributes map[string]string `json:"attributes"`
+		} `json:"request"`
+		Policy struct {
+			Decision string `json:"decision"`
+		} `json:"policy"`
+	}
+	if err := json.Unmarshal(decision, &tr); err != nil {
+		return true
+	}
+	denied := strings.ToLower(strings.TrimSpace(tr.Policy.Decision)) == "deny"
+	return !(denied && tr.Request.Attributes["executor"] == "consumer")
 }
 
 func jsonCorrelationMatch(raw []byte, want string) bool {

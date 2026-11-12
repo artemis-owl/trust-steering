@@ -32,6 +32,8 @@ The governance model operates at the **task (epic) level**, not per-request:
 2. **Execution**: Agent works freely. No interception of individual LLM calls.
 3. **Post-flight**: Agent calls `submit_evidence` with the same `correlation_id` → evidence recorded for audit.
 
+Every decision trace of a work order issued over MCP carries `request.attributes.executor: consumer` (a caller cannot set it), and the worker publishes no evidence for it: the consumer that executes the work order reports its own with `submit_evidence`. A denied one is still exportable with `scripts/export_audit_packet.sh`, and its packet carries an empty `evidence.jsonl`.
+
 This keeps the trust layer "on the loop" (audit) rather than "in the loop" (blocking every decision).
 
 ## Tools
