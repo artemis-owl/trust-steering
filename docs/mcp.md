@@ -271,6 +271,19 @@ Agent:   "Done! I've refactored the auth module to use JWT. Here's
 
 The user never had to ask for authorization or evidence submission — the rules made it automatic. The trust layer was "on the loop" for the entire task.
 
+## A consumer that makes a governed inference call
+
+[`tools/governed-inference/governed_inference.py`](../tools/governed-inference/governed_inference.py) is a standard-library consumer that speaks to `./gateway --mcp` over stdio and asks for two work orders for one confidential request: one for a route off the machine (denied, no call made) and one for `local`. Only on an allow does it call the local OpenAI-compatible server itself, then it reports the call with `submit_evidence`; steering never sees the inference traffic. Its test (`tools/governed-inference/test_governed_inference.py`, run by `scripts/test.sh`) proves no model call is made without an allow.
+
+```bash
+python3 tools/governed-inference/governed_inference.py \
+  --gateway services/gateway/gateway \
+  --model-url http://127.0.0.1:8000/v1 \
+  --model local
+```
+
+Add `--no-call` to rehearse: the work orders are requested and evidence is submitted with `result=skipped`, but no model call is made.
+
 ## Audit Trail
 
 Every `request_work_order` call produces a `DecisionTrace` event and every `submit_evidence` call produces an `EvidenceEvent`. Both are keyed by `correlation_id`.
