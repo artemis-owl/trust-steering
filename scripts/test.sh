@@ -25,6 +25,8 @@ if command -v go >/dev/null 2>&1; then
   (cd services/gateway && go test ./... >/dev/null) || fail=1
   echo "- go test services/worker"
   (cd services/worker && go test ./... >/dev/null) || fail=1
+  echo "- governed inference consumer"
+  python3 tools/governed-inference/test_governed_inference.py >/dev/null || fail=1
   echo "- go test tools/grant-reconcile"
   (cd tools/grant-reconcile && go test ./... >/dev/null) || fail=1
   echo "- validate example Decision Trace against Avro"
