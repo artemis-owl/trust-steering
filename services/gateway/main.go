@@ -170,6 +170,12 @@ func handleDecide(w http.ResponseWriter, r *http.Request) {
 		correlationID = "corr-" + randomHex(8)
 	}
 
+	// The executor is set only by the gateway: the MCP request_work_order path
+	// marks its work orders executor=consumer, and the worker leaves such traces
+	// alone. A caller over HTTP could otherwise use it to switch off the
+	// worker's evidence for its own request, so a caller-supplied one is stripped.
+	delete(req.Request.Attributes, "executor")
+
 	// Approval state only enters policy input via the server-side store;
 	// caller-supplied approval attributes are stripped.
 	approval := applyApprovalGate(correlationID, &req.Request)

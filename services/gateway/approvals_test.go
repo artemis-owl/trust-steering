@@ -176,6 +176,20 @@ func TestHandleDecideIgnoresCallerSuppliedApproval(t *testing.T) {
 	}
 }
 
+func TestHandleDecideStripsCallerSuppliedExecutor(t *testing.T) {
+	t.Setenv("APPROVALS_DIR", t.TempDir())
+	t.Setenv("OPA_URL", "")
+	t.Setenv("ALLOW_LOCAL_POLICY_FALLBACK", "true")
+
+	trace, code, body := decideProd(t, "", map[string]string{"executor": "consumer"})
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", code, body)
+	}
+	if got, ok := trace.Request.Attributes["executor"]; ok {
+		t.Fatalf("caller-supplied executor must be stripped from the recorded trace, got %q", got)
+	}
+}
+
 func TestHandleDecideDenyThenGrantThenAllowOnce(t *testing.T) {
 	t.Setenv("APPROVALS_DIR", t.TempDir())
 	t.Setenv("OPA_URL", "")
