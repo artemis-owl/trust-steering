@@ -331,7 +331,7 @@ The MCP client will fail to launch the server process. Without agent rules, the 
 No. `human_approved` is trust-reserved and rejected from client input. Approval only exists as a server-side record written by a human via `scripts/approve.sh`, is bound to one correlation_id + action/resource/environment, expires, and is consumed on first use.
 
 **Q: Can I deny specific actions?**
-Yes. Both OPA and the local fallback engine dynamically load roles and permitted actions from the [roles.json](file:///Users/williamcorbett/working/repos/artemis/trust-systems/steering/policies/opa/rego/roles.json) configuration file. You can customize or add custom roles/permissions there to be enforced dynamically.
+Yes. Both OPA and the local fallback engine dynamically load roles and permitted actions from the [roles.json](../policies/opa/rego/roles.json) configuration file. You can customize or add custom roles/permissions there to be enforced dynamically.
 
 
 **Q: Does this work with any MCP client?**

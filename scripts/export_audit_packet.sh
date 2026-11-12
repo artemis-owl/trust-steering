@@ -150,12 +150,38 @@ if [ -f "${root_dir}/.keys/cosign.pub" ]; then
   cp "${root_dir}/.keys/cosign.pub" "${out_dir}/supplychain/"
 fi
 
-cat >"${out_dir}/supplychain/README.md" <<EOF
-# Supply Chain Evidence
-This directory contains the public key (\`cosign.pub\`) used to cryptographically sign the Gateway and Worker images.
-If SBOMs were generated, they are included in the \`sbom_out/\` directory as SPDX JSON artifacts.
-These attestations mathematically prove the integrity of the binaries enforcing the policy decisions contained in this Audit Packet.
-EOF
+python3 -c "
+import json, os
+sc = os.path.join(os.environ['EXPORT_OUT_DIR'], 'supplychain')
+lines = ['# Supply Chain Evidence', '']
+has_key = os.path.isfile(os.path.join(sc, 'cosign.pub'))
+sboms = []
+sbom_dir = os.path.join(sc, 'sbom_out')
+if os.path.isdir(sbom_dir):
+    for root, _, files in os.walk(sbom_dir):
+        for name in sorted(files):
+            if name.endswith('.json'):
+                sboms.append(os.path.join(root, name))
+sboms.sort()
+if not has_key and not sboms:
+    lines.append('No supply-chain file accompanies this packet.')
+if has_key:
+    lines.append('\`cosign.pub\` is included; this export verifies no signature with it.')
+for path in sboms:
+    rel = os.path.relpath(path, sc)
+    try:
+        with open(path) as f:
+            created = (json.load(f).get('creationInfo') or {}).get('created') or 'unknown'
+    except (OSError, ValueError, AttributeError):
+        created = 'unknown (not readable as SPDX JSON)'
+    lines.append('- \`%s\`: SBOM created %s' % (rel, created))
+if sboms:
+    lines.append('')
+    lines.append('An SBOM describes the image it was generated from at the time shown. '
+                 'This export does not check that those images, or any locally built binary, '
+                 'produced the decisions in this packet.')
+open(os.path.join(sc, 'README.md'), 'w').write('\\n'.join(lines) + '\\n')
+"
 
 trap - EXIT
 rm_tmpdir

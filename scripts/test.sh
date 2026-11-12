@@ -37,6 +37,12 @@ else
   echo "- go not found; skipping Go tests"
 fi
 
+echo "- no home path in tracked files"
+if home_paths="$(git grep -nIE '/Users/[A-Za-z0-9._-]+' -- . ':!scripts/test.sh')"; then
+  echo "${home_paths}"
+  fail=1
+fi
+
 echo "- schema files present"
 test -f schemas/decision_trace.avsc || fail=1
 test -f schemas/evidence.avsc || fail=1
