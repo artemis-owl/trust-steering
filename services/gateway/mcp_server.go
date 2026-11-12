@@ -70,7 +70,7 @@ func newMCPServer() *server.MCPServer {
 		mcp.WithString("attributes",
 			mcp.Description(
 				"Optional structured JSON string of key-value attributes (e.g. {\"tests_passed\":\"true\"}). "+
-					"Trust-reserved keys (role, agent_id, human_approved) are rejected: identity comes from the "+
+					"Trust-reserved keys (role, agent_id, human_approved, executor) are rejected: identity comes from the "+
 					"gateway's own configuration and approvals must originate out-of-band.",
 			),
 		),
@@ -121,7 +121,7 @@ func newMCPServer() *server.MCPServer {
 // would let the governed agent assert its own identity or approval state.
 func isTrustReservedAttribute(key string) bool {
 	switch key {
-	case "role", "agent_id", "human_approved":
+	case "role", "agent_id", "human_approved", "executor":
 		return true
 	}
 	return false
@@ -206,9 +206,10 @@ func handleRequestWorkOrder(ctx context.Context, request mcp.CallToolRequest) (*
 			attrs[k] = v
 		}
 	}
-	if len(attrs) > 0 {
-		reqObj.Attributes = attrs
-	}
+	// A work order issued over MCP is executed by the consumer that asked
+	// for it, which reports with submit_evidence; the worker leaves it alone.
+	attrs["executor"] = "consumer"
+	reqObj.Attributes = attrs
 
 	correlationID := "corr-" + randomHex(8)
 	if c, err := request.RequireString("correlation_id"); err == nil && c != "" {

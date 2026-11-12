@@ -67,7 +67,11 @@ if [[ -n "${AUDIT_DECISION_TRACE_FILE:-}" && -n "${AUDIT_EVIDENCE_FILE:-}" ]]; t
     exit 1
   fi
   verify_corr_in_file "${AUDIT_DECISION_TRACE_FILE}"
-  verify_corr_in_file "${AUDIT_EVIDENCE_FILE}"
+  # An empty evidence file is a denied work order its consumer would have
+  # executed: there is no evidence to check.
+  if [[ -s "${AUDIT_EVIDENCE_FILE}" ]]; then
+    verify_corr_in_file "${AUDIT_EVIDENCE_FILE}"
+  fi
   tmp_dec="${AUDIT_DECISION_TRACE_FILE}"
   tmp_ev="${AUDIT_EVIDENCE_FILE}"
 elif [[ -n "${KAFKA_BOOTSTRAP_SERVERS:-}" ]]; then
@@ -90,13 +94,19 @@ fi
 (
   cd "${root_dir}/tools/schema-check"
   go run . "${schema_decision}" "${tmp_dec}" >/dev/null
-  go run . "${schema_evidence}" "${tmp_ev}" >/dev/null
+  if [[ -s "${tmp_ev}" ]]; then
+    go run . "${schema_evidence}" "${tmp_ev}" >/dev/null
+  fi
 )
 
 mkdir -p "${out_dir}/policy" "${out_dir}/schemas" "${out_dir}/observability" "${out_dir}/supplychain"
 
 json_one_line "${tmp_dec}" >"${out_dir}/decision_traces.jsonl"
-json_one_line "${tmp_ev}" >"${out_dir}/evidence.jsonl"
+if [[ -s "${tmp_ev}" ]]; then
+  json_one_line "${tmp_ev}" >"${out_dir}/evidence.jsonl"
+else
+  : >"${out_dir}/evidence.jsonl"
+fi
 
 cp "${policy_file}" "${out_dir}/policy/decision.rego"
 export BUNDLE_HASH="sha256:$(shasum -a 256 "${policy_file}" | awk '{print $1}')"

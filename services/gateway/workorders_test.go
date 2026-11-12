@@ -270,3 +270,38 @@ func TestSubmitEvidenceJoinsTheDecisionTrace(t *testing.T) {
 		t.Fatalf("evidence details.policy_decision = %q, want %q", got, "allow")
 	}
 }
+
+func TestRequestWorkOrderTraceNamesTheConsumerAsExecutor(t *testing.T) {
+	linkageEnv(t)
+
+	var traces []DecisionTrace
+	mcpTraceObserver = func(tr DecisionTrace) { traces = append(traces, tr) }
+	t.Cleanup(func() { mcpTraceObserver = nil })
+
+	issueWorkOrder(t, map[string]any{
+		"action":   "inference",
+		"resource": "local",
+	})
+	if len(traces) != 1 {
+		t.Fatalf("expected one decision trace, got %d", len(traces))
+	}
+	if got := traces[0].Request.Attributes["executor"]; got != "consumer" {
+		t.Fatalf("trace request.attributes.executor = %q, want %q", got, "consumer")
+	}
+}
+
+func TestRequestWorkOrderRefusesSelfAssertedExecutor(t *testing.T) {
+	linkageEnv(t)
+
+	res := callTool(t, handleRequestWorkOrder, map[string]any{
+		"action":     "inference",
+		"resource":   "local",
+		"attributes": `{"executor":"worker"}`,
+	})
+	if !res.IsError {
+		t.Fatalf("expected request_work_order to refuse a caller-set executor")
+	}
+	if !strings.Contains(toolText(t, res), "trust-reserved") {
+		t.Fatalf("expected trust-reserved rejection, got: %s", toolText(t, res))
+	}
+}
