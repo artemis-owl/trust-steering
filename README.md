@@ -56,6 +56,37 @@ Local **process** demo (no containers; gateway on port `8081` so it does not con
 ./scripts/demo_local.sh
 ```
 
+One run of it, at `eca0b4f` on 2026-11-14 with OPA 1.14.0 on the host, output as printed:
+
+```
+======================================================
+Step 1: AI attempts deploy WITHOUT 'tests_passed'
+======================================================
+OPA Decision: deny
+Rationale:    Denied by default.
+
+======================================================
+Step 2: AI attempts deploy WITH 'tests_passed'
+======================================================
+OPA Decision: allow
+Rationale:    Dev deploy permitted because tests passed.
+
+======================================================
+Step 3: Action Executed -> Evidence Generated
+======================================================
+Evidence recorded for correlation_id: corr-b86108ae037b7bbe
+
+======================================================
+Step 4: Compiling Immutable Audit Packet
+======================================================
+Audit packet written to: /tmp/claude-501/trust-steering/out/audit-packets/corr-b86108ae037b7bbe
+Hint: if traces were exported to Jaeger, search http://127.0.0.1:16686 by trace_id in observability/pointers.json or tag steering.correlation_id.
+
+Demo completed successfully!
+```
+
+The first request is denied and the second allowed; the script exits 1 if either decides otherwise.
+
 In-cluster kind smoke demo (includes OPA, gateway, worker, OTel collector, and Jaeger with traces emitted over OTLP and UI forwarded to 16686):
 ```
 make kind-demo
