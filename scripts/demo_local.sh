@@ -49,7 +49,7 @@ gateway_env=(
 )
 
 if command -v opa >/dev/null 2>&1; then
-  opa run --server --addr "127.0.0.1:8181" "${root_dir}/policies/opa" >"${out_dir}/opa.log" 2>&1 &
+  opa run --server --addr "127.0.0.1:8181" "${root_dir}/policies/opa/rego" >"${out_dir}/opa.log" 2>&1 &
   OPA_PID=$!
   wait_for_http "http://127.0.0.1:8181/health" "OPA"
   gateway_env+=("OPA_URL=http://127.0.0.1:8181")
@@ -92,6 +92,7 @@ printf "Step 1: AI attempts deploy WITHOUT 'tests_passed'\n"
 printf "======================================================\n"
 curl -fsS -H "Content-Type: application/json" -X POST "http://127.0.0.1:8081/decide" --data @"${out_dir}/req_denied.json" > "${out_dir}/trace_denied.json"
 decision=$(jq -r .policy.decision "${out_dir}/trace_denied.json")
+[[ "${decision}" == "deny" ]] || { echo "demo_local: step 1 expected deny, got ${decision}" >&2; exit 1; }
 rationale=$(jq -r '.policy.rationale[0].message' "${out_dir}/trace_denied.json")
 echo "OPA Decision: ${decision}"
 echo "Rationale:    ${rationale}"
@@ -101,6 +102,7 @@ printf "Step 2: AI attempts deploy WITH 'tests_passed'\n"
 printf "======================================================\n"
 curl -fsS -H "Content-Type: application/json" -X POST "http://127.0.0.1:8081/decide" --data @"${out_dir}/req_allowed.json" > "${out_dir}/trace_allowed.json"
 decision=$(jq -r .policy.decision "${out_dir}/trace_allowed.json")
+[[ "${decision}" == "allow" ]] || { echo "demo_local: step 2 expected allow, got ${decision}" >&2; exit 1; }
 rationale=$(jq -r '.policy.rationale[0].message' "${out_dir}/trace_allowed.json")
 echo "OPA Decision: ${decision}"
 echo "Rationale:    ${rationale}"
