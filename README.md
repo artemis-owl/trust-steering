@@ -1,12 +1,12 @@
 # Steering: Enterprise DecisionOps Control Plane
 
-The Steering Control Plane provides a local-first reference architecture for **Enterprise DecisionOps**. It demonstrates how AI agents can operate safely by mapping runtime execution context (e.g., test coverage, human approval) to verifiable audit evidence via an immutable policy engine.
+The Steering Control Plane provides a local-first reference architecture for **Enterprise DecisionOps**. It demonstrates how AI agents can operate safely by mapping runtime execution context (e.g., test coverage, human approval) to a policy decision and a recorded decision trace, evidence event, and audit packet.
 
 ## The Architecture
 **Decision Trace Gateway (Anchor Project)**: A proxy system that explicitly maps an agent's execution context to policy and proves *why* an action was authorized.
 
 **The Core Flow**:
-`AI Agent (MCP Context) → Gateway Manager (OPA) → Decision Trace Event → Stream (Redpanda/Kafka) → Worker Action → Evidence Append → Observability (Jaeger) → Immutable Audit Packet`
+`AI Agent (MCP Context) → Gateway Manager (OPA) → Decision Trace Event → Stream (Redpanda/Kafka) → Worker Records Evidence → Observability (Jaeger) → Audit Packet`
 
 ## Why local-first (no ongoing cloud spend)
 - Fast iteration and tight feedback loops on a single Mac.
@@ -26,8 +26,8 @@ The Steering Control Plane provides a local-first reference architecture for **E
 ### Trust-in-the-Loop Agent Integration (MCP)
 The Gateway embeds an MCP Server (`gateway --mcp`) that exposes `request_work_order` and `submit_evidence` as tools to commodity AI agents (Cursor, Claude Code, Aider, Cline).
 - The Gateway is **out-of-band** (Semantic Governance). It governs authority without proxying inference traffic.
-- The MCP client is the governed party: subject identity/role come from gateway configuration, trust-reserved attributes (`role`, `agent_id`, `human_approved`) are rejected from client input, and an allow is only returned once the decision trace is durably persisted.
-- Prod deploys require **out-of-band human approval**: the gateway records a pending approval, a human grants it with `./scripts/approve.sh grant <correlation_id>`, and the grant is single-use, TTL-bound, and consumed server-side — the agent can never self-approve.
+- The MCP client is the governed party: subject identity/role come from gateway configuration, trust-reserved attributes (`role`, `agent_id`, `human_approved`) are rejected from client input. With `KAFKA_BOOTSTRAP_SERVERS` set, an allow is only returned once the decision trace is published to the broker; without a broker the trace is returned to the caller and a work-order record is written under `out/workorders/`.
+- Prod deploys require **out-of-band human approval**: the gateway records a pending approval, a human grants it with `./scripts/approve.sh grant <correlation_id>`, and the grant is single-use, TTL-bound, and consumed server-side. The MCP channel rejects `human_approved` from the agent; the grant itself is a file written by `scripts/approve.sh`, which authenticates nobody, so anything that can run that script or write the approvals directory can grant.
 - See `docs/mcp.md` for setup and the approval-flow walkthrough.
 
 ### Streaming and Microservices
@@ -56,30 +56,32 @@ Local **process** demo (no containers; gateway on port `8081` so it does not con
 ./scripts/demo_local.sh
 ```
 
-One run of it, at `eca0b4f` on 2026-11-14 with OPA 1.14.0 on the host, output as printed:
+It builds the gateway and worker into its output directory, runs the binaries, stops them on exit, and refuses to start if anything already answers on `8081` or `9090`.
+
+One run of it, on 2026-11-15 with no `opa` on the host (so the gateway used its local fallback), output as printed:
 
 ```
 ======================================================
 Step 1: AI attempts deploy WITHOUT 'tests_passed'
 ======================================================
-OPA Decision: deny
-Rationale:    Denied by default.
+Policy decision: deny
+Rationale:       Denied by default.
 
 ======================================================
 Step 2: AI attempts deploy WITH 'tests_passed'
 ======================================================
-OPA Decision: allow
-Rationale:    Dev deploy permitted because tests passed.
+Policy decision: allow
+Rationale:       Dev deploy permitted because tests passed.
 
 ======================================================
-Step 3: Action Executed -> Evidence Generated
+Step 3: Worker Records Evidence
 ======================================================
-Evidence recorded for correlation_id: corr-b86108ae037b7bbe
+Evidence recorded for correlation_id: corr-91078df56b3f8758
 
 ======================================================
-Step 4: Compiling Immutable Audit Packet
+Step 4: Compiling Audit Packet
 ======================================================
-Audit packet written to: /tmp/claude-501/trust-steering/out/audit-packets/corr-b86108ae037b7bbe
+Audit packet written to: /home/user/trust-steering/out/audit-packets/corr-91078df56b3f8758
 Hint: if traces were exported to Jaeger, search http://127.0.0.1:16686 by trace_id in observability/pointers.json or tag steering.correlation_id.
 
 Demo completed successfully!

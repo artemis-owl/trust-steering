@@ -10,7 +10,7 @@ This table maps **AI RMF outcome areas** to concrete repo artifacts and evidence
 | **Govern** | Clear decision authority and policy enforcement | `policies/opa/rego/decision.rego`, `policies/opa/tests/` | Policy bundle hash + test results; Decision Trace rationale |
 | **Govern** | Change management for policies/schemas | `scripts/test.sh`, `docs/reading-plan-6w.md` | Failing checks on incompatible schema/policy changes (when implemented) |
 | **Map** | System context, decision scope, and boundaries | `docs/decision-trace-schema.md`, `docs/threat-model.md` | Narrative definition of what is decided and why |
-| **Map** | Data classification and minimization | `schemas/decision_trace.avsc`, `schemas/evidence.avsc` | Explicit fields for data_classification + pii flags |
+| **Map** | Data classification and minimization | `schemas/decision_trace.avsc` | Explicit fields for data_classification + pii flags (Decision Trace only) |
 | **Measure** | Evidence‑grade traceability | `observability/otel-collector.yaml`, `docs/audit-packet.md` | Correlation + trace IDs; audit packet completeness criteria |
 | **Measure** | Robustness/consistency of decisions | `policies/opa/tests/decision_test.rego` | Policy unit test outcomes |
 | **Manage** | Ongoing monitoring and incident response readiness | `docs/roadmap.md`, `observability/` | Evidence queries and trace reconstruction path |

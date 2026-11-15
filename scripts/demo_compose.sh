@@ -10,7 +10,7 @@ request_file="${DECISION_REQUEST_FILE:-${root_dir}/schemas/examples/decision_req
 gateway_base="${GATEWAY_URL:-http://127.0.0.1:8080}"
 worker_base="${WORKER_URL:-http://127.0.0.1:9090}"
 
-for cmd in go curl; do
+for cmd in go curl jq; do
   if ! command -v "${cmd}" >/dev/null 2>&1; then
     echo "${cmd} is required for scripts/demo_compose.sh" >&2
     exit 1
@@ -41,3 +41,5 @@ curl -fsS \
 printf 'Compose demo outputs written to %s\n' "${out_dir}"
 printf 'Decision Trace: %s\n' "${out_dir}/decision_trace.json"
 printf 'Evidence: %s\n' "${out_dir}/evidence.json"
+printf 'Policy decision: %s\n' "$(jq -r .policy.decision "${out_dir}/decision_trace.json")"
+printf 'The sample request is denied by policy; its evidence is action.skipped.\n'

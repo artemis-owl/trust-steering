@@ -11,7 +11,7 @@ When an AI action is evaluated by the gateway, the auditor must know that the ga
 We use [Syft](https://github.com/anchore/syft) to scan our Go binaries and Docker images.
 Syft outputs standard `SPDX JSON` formatting, which is the industry standard format easily ingested by vulnerability scanners.
 
-To generate the SBOMs locally:
+To generate the SBOMs locally (needs `syft` and local images tagged `steering-gateway:dev` and `steering-worker:dev`, built by `scripts/kind_load.sh`):
 ```bash
 ./scripts/generate_sbom.sh
 ```
@@ -19,4 +19,4 @@ To generate the SBOMs locally:
 The resulting `gateway.spdx.json` and `worker.spdx.json` files are automatically written to `supplychain/sbom/out/`.
 
 ## Integration with the Audit Packet
-SBOMs alone are useful, but their real value is when they are **attested** and exported. The SBOM JSON is attached cryptographically to the image via Cosign (see `supplychain/signing/README.md`). Finally, `scripts/export_audit_packet.sh` zips these files together with the decision traces to provide a holistic compliance handshake.
+`scripts/sign_images.sh` attaches the SBOM JSON to the image as a Cosign attestation (see `supplychain/signing/README.md`); nothing ties that attestation to a commit or build recipe. `scripts/export_audit_packet.sh` copies the SBOM files (and the cosign public key, if present) into the packet directory for one correlation_id. It makes no zip and does not check that those images produced the decisions in the packet.

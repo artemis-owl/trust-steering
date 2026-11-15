@@ -13,13 +13,13 @@ Our local environment uses basic tools (`syft` and `cosign` with local keys) to 
 | `generate_sbom.sh` | A build stage job running the `anchore/syft:latest` image. | The generated `.spdx.json` is exported as a CI/CD job artifact to be archived or ingested by a security dashboard. |
 | `sign_images.sh` | A publish stage job that pushes to the Enterprise OCI Registry (e.g. AWS ECR, GitLab Registry). | **Keyless Signing:** Instead of generating `.keys/cosign.key`, the CI job uses the platform's OIDC token (e.g. `CI_JOB_JWT`) to authenticate with Sigstore's Fulcio. The signature is bound to the identity of the CI runner and the specific Git commit, not a static private key. |
 | `verify_provenance.sh`| Executed by Kubernetes Admission Controllers (e.g., Kyverno). | The K8s cluster enforces a policy: *No pod can start unless its image is signed, and the `verify-attestation` step ensures the SBOM has no critical vulnerabilities.* |
-| `export_audit_packet.sh` | A scheduled or release-triggered artifact packaging job. | The ZIP file is pushed to an immutable S3 bucket or compliant object store for long-term audit retention. |
+| `export_audit_packet.sh` | A scheduled or release-triggered artifact packaging job. | Locally it writes a directory of plain files for one correlation_id (and copies the public key and SBOMs, not attestations); a pipeline would archive that directory in retained storage. |
 
 ## Why Start Local?
 
 By establishing these scripts locally, we establish the **developer contract**:
 - We know exactly how SBOMs are shaped.
-- We know the commands to attach attestations.
-- We integrate the proofs immediately into the local "Audit Packet" before spending cycles configuring cloud IAM and Managed PKI.
+- We know the commands to attach an SBOM attestation. Locally nothing ties an attestation to a commit or build recipe; that is the part keyless CI signing would add.
+- The local audit packet carries the public key and SBOMs, not signatures or attestations.
 
-This local parity ensures that when this workload is lifted to an enterprise CI system, the architectural foundation of "Supply Chain Provenance" is already proven.
+The local scripts show the shape of the steps; they do not prove provenance for a given build.

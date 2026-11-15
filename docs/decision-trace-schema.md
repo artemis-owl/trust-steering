@@ -18,13 +18,13 @@ The Decision Trace is the primary evidence object in this repo: a compact, schem
 - **Data classification**: classification + PII flags for minimization and handling rules.
 
 ## Invariants (non-negotiable)
-1. **No action without policy decision**: if an action executes, a prior Decision Trace must exist.
+1. **No evidence without a Decision Trace**: the worker records evidence only for a trace it is sent. It accepts any well-formed trace and does not check where it came from (that the gateway issued it); it executes nothing, it records.
 2. **Every action is traceable**: every Decision Trace includes a `correlation_id` and a `trace_id`.
-3. **Decisions are versioned**: Decision Trace records the exact policy bundle version/hash used.
-4. **Schema-validated events**: Decision Trace and Evidence events must validate against schemas in `schemas/`.
+3. **Decisions are versioned**: Decision Trace records `policy.bundle_version` and `policy.bundle_hash`. `bundle_hash` is the sha256 of `decision.rego`, computed by the script that launches the gateway (default `local-dev` if unset); `roles.json` is not in it.
+4. **Schema-validated events**: Decision Trace and Evidence events are validated against `schemas/` in CI (on the sample payloads) and by the demo scripts (on their output). The services do not validate at runtime.
 
 ## Versioning strategy
 - Event schemas are versioned independently (e.g., `schema_version` field + compatibility rules).
-- Policy bundles are versioned and content-addressed (hash) so “what policy ran” is unambiguous.
+- The policy hash covers `decision.rego` only (sha256, computed by the launching script); `roles.json` is not hashed, so the hash alone does not pin the roles that were in force.
 - Services record their build/provenance identifiers in Evidence events.
 

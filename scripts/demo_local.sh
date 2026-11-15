@@ -38,6 +38,12 @@ wait_for_http() {
 }
 
 export GOCACHE="${GOCACHE:-${root_dir}/.gocache}"
+for port in 8081 9090; do
+  if curl -s -o /dev/null "http://127.0.0.1:${port}/" 2>/dev/null; then
+    echo "demo_local: port ${port} is already serving; stop that process first" >&2
+    exit 1
+  fi
+done
 
 policy_hash="sha256:$(shasum -a 256 "${root_dir}/policies/opa/rego/decision.rego" | awk '{print $1}')"
 policy_version="${POLICY_BUNDLE_VERSION:-0.1.0}"
@@ -57,17 +63,13 @@ else
   gateway_env+=("ALLOW_LOCAL_POLICY_FALLBACK=true")
 fi
 
-(
-  cd "${root_dir}/services/gateway"
-  env "${gateway_env[@]}" go run . >"${out_dir}/gateway.log" 2>&1
-) &
+(cd "${root_dir}/services/gateway" && go build -o "${out_dir}/gateway" .)
+env "${gateway_env[@]}" "${out_dir}/gateway" >"${out_dir}/gateway.log" 2>&1 &
 GATEWAY_PID=$!
 wait_for_http "http://127.0.0.1:8081/healthz" "gateway"
 
-(
-  cd "${root_dir}/services/worker"
-  go run . >"${out_dir}/worker.log" 2>&1
-) &
+(cd "${root_dir}/services/worker" && go build -o "${out_dir}/worker" .)
+"${out_dir}/worker" >"${out_dir}/worker.log" 2>&1 &
 WORKER_PID=$!
 wait_for_http "http://127.0.0.1:9090/healthz" "worker"
 
@@ -94,8 +96,8 @@ curl -fsS -H "Content-Type: application/json" -X POST "http://127.0.0.1:8081/dec
 decision=$(jq -r .policy.decision "${out_dir}/trace_denied.json")
 [[ "${decision}" == "deny" ]] || { echo "demo_local: step 1 expected deny, got ${decision}" >&2; exit 1; }
 rationale=$(jq -r '.policy.rationale[0].message' "${out_dir}/trace_denied.json")
-echo "OPA Decision: ${decision}"
-echo "Rationale:    ${rationale}"
+echo "Policy decision: ${decision}"
+echo "Rationale:       ${rationale}"
 
 printf "\n======================================================\n"
 printf "Step 2: AI attempts deploy WITH 'tests_passed'\n"
@@ -104,17 +106,17 @@ curl -fsS -H "Content-Type: application/json" -X POST "http://127.0.0.1:8081/dec
 decision=$(jq -r .policy.decision "${out_dir}/trace_allowed.json")
 [[ "${decision}" == "allow" ]] || { echo "demo_local: step 2 expected allow, got ${decision}" >&2; exit 1; }
 rationale=$(jq -r '.policy.rationale[0].message' "${out_dir}/trace_allowed.json")
-echo "OPA Decision: ${decision}"
-echo "Rationale:    ${rationale}"
+echo "Policy decision: ${decision}"
+echo "Rationale:       ${rationale}"
 
 printf "\n======================================================\n"
-printf "Step 3: Action Executed -> Evidence Generated\n"
+printf "Step 3: Worker Records Evidence\n"
 printf "======================================================\n"
 curl -fsS -H "Content-Type: application/json" -X POST "http://127.0.0.1:9090/execute" --data @"${out_dir}/trace_allowed.json" > "${out_dir}/evidence.json"
 echo "Evidence recorded for correlation_id: $(jq -r .correlation_id "${out_dir}/evidence.json")"
 
 printf "\n======================================================\n"
-printf "Step 4: Compiling Immutable Audit Packet\n"
+printf "Step 4: Compiling Audit Packet\n"
 printf "======================================================\n"
 (
   cd "${root_dir}/tools/schema-check"

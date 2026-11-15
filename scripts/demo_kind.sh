@@ -9,7 +9,7 @@ cluster_name="${KIND_CLUSTER_NAME:-steering}"
 gateway_port="${GATEWAY_PORT:-18080}"
 worker_port="${WORKER_PORT:-19090}"
 
-for cmd in kind docker kubectl curl go; do
+for cmd in kind docker kubectl curl go jq; do
   if ! command -v "${cmd}" >/dev/null 2>&1; then
     echo "${cmd} is required for scripts/demo_kind.sh" >&2
     exit 1
@@ -115,4 +115,6 @@ capture_diagnostics
 printf 'Kind demo outputs written to %s\n' "${out_dir}"
 printf 'Decision Trace: %s\n' "${out_dir}/decision_trace.json"
 printf 'Evidence: %s\n' "${out_dir}/evidence.json"
+printf 'Policy decision: %s\n' "$(jq -r .policy.decision "${out_dir}/decision_trace.json")"
+printf 'The sample request is denied by policy; its evidence is action.skipped.\n'
 printf 'Jaeger UI: http://127.0.0.1:16686\n'
