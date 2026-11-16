@@ -273,18 +273,27 @@ The user never had to ask for authorization or evidence submission — the rules
 
 ## A consumer that makes a governed inference call
 
-[`tools/governed-inference/governed_inference.py`](../tools/governed-inference/governed_inference.py) is a standard-library consumer that speaks to `./gateway --mcp` over stdio and asks for two work orders for one confidential request: one for a route off the machine (denied, no call made) and one for `local`. Only on an allow does it call the local OpenAI-compatible server itself, then it reports the call with `submit_evidence`; steering never sees the inference traffic. Its test (`tools/governed-inference/test_governed_inference.py`, run by `scripts/test.sh`) proves no model call is made without an allow.
+[`tools/governed-inference/governed_inference.py`](../tools/governed-inference/governed_inference.py) is a standard-library consumer that speaks to `./gateway --mcp` over stdio. For one request of the declared `--classification` (default `confidential`) it asks for a work order for a route off the machine (`--offsite-route`, default `anthropic/claude-haiku-5-5`), then one for `local`. Each work order's `context` names that classification. The consumer makes a call only on an allow, and reports each call it was allowed with `submit_evidence` against that work order's `correlation_id`. Steering never sees the inference traffic. Its test (`tools/governed-inference/test_governed_inference.py`, run by `scripts/test.sh`) uses a stub server on 127.0.0.1 for both routes. It proves no model call is made without an allow, and no test can reach the real API.
 
-It needs the gateway binary built first (`cd services/gateway && go build -o gateway .`), and the gateway it launches inherits its environment, so a policy source must be set: `ALLOW_LOCAL_POLICY_FALLBACK=true` or `OPA_URL`. Without one, every work order fails with `policy engine unavailable`. Run it from the repo root (or set `STEERING_ROOT`) so `roles.json` is found.
+- **Off the machine.** With `confidential` the policy denies the route (`DENY_INFERENCE_OFFSITE`) and nothing is called. With `internal` (or `public`) it allows it (`ALLOW_INFERENCE_OFFSITE`). The consumer then makes one call to the Anthropic Messages API: `POST <--offsite-url>/v1/messages`, with the route's `anthropic/` prefix removed as the model, `max_tokens` 1024 and `--prompt` as the one user message. `--offsite-url` defaults to `https://api.anthropic.com`. The key is read from `ANTHROPIC_API_KEY` and nowhere else. **The call is billed to the key's owner.** If the variable is unset or empty, no call is made and the evidence is `result=skipped`, with a summary that names the missing key.
+- **Evidence.** The off-machine summary is `route=… model=… input_tokens=… output_tokens=… latency_ms=… stop_reason=…`. It carries token counts and no content: never the prompt, the reply or the key. The key is never printed. `result` is `ok`, or `error` on `stop_reason=refusal` or an HTTP error (summary `route=… http_status=…`).
+- **`--offsite-only`** asks only for the off-machine work order, prints the result and exits. Without it the local work order follows: on an allow the consumer calls the local OpenAI-compatible server (`--model-url`) and reports it the same way.
+
+It needs the gateway binary built first (`cd services/gateway && go build -o gateway .`). The gateway it launches inherits its environment, so a policy source must be set: `ALLOW_LOCAL_POLICY_FALLBACK=true` or `OPA_URL`. Without one, every work order fails with `policy engine unavailable`. Run it from the repo root (or set `STEERING_ROOT`) so `roles.json` is found.
 
 ```bash
 ALLOW_LOCAL_POLICY_FALLBACK=true python3 tools/governed-inference/governed_inference.py \
   --gateway services/gateway/gateway \
   --model-url http://127.0.0.1:8000/v1 \
   --model local
+
+# Off the machine only, for internal data (a real, billed call if ANTHROPIC_API_KEY is set):
+ALLOW_LOCAL_POLICY_FALLBACK=true python3 tools/governed-inference/governed_inference.py \
+  --gateway services/gateway/gateway \
+  --classification internal --offsite-only
 ```
 
-Add `--no-call` to rehearse: the work orders are requested and evidence is submitted with `result=skipped`, but no model call is made.
+Add `--no-call` to rehearse: the work orders are requested and evidence is submitted with `result=skipped`, but no model call is made on either route.
 
 ## Audit Trail
 
