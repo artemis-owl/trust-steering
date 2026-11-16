@@ -9,7 +9,7 @@ Quick operator paths for this repo. Details live in [`README.md`](../README.md),
 | **Compose, API-only** | No | OPA + gateway + worker in Docker | Default dev/demo over HTTP |
 | **Compose + stream** | Redpanda (Kafka API) | Same + broker; gateway produces traces, worker consumes/produces evidence | Async / Phase 2 path |
 | **Compose + obs** | No extra broker | Adds OTel collector + Jaeger; OTLP from gateway/worker | Traces / correlation evidence |
-| **Local processes** | Optional host OPA | `go run` gateway (`8081`) + worker (`9090`) | Fast iteration without building images |
+| **Local processes** | Optional host OPA | Gateway (`8081`) + worker (`9090`) built with `go build` and run as binaries | Fast iteration without building images |
 | **Kind** | No (current manifests) | OPA + gateway + worker + Jaeger + OTel in-cluster | K8s-shaped smoke test |
 | **MCP** | Optional | Gateway binary in stdio mode | AI agent trust middleware (Cursor, Claude Code, VS Code) |
 
@@ -67,13 +67,15 @@ curl -fsS http://127.0.0.1:8181/health
 
 | Command | Needs |
 |---------|--------|
-| `make test` | `go`, `curl`; `opa` optional; **no** Docker broker |
+| `make test` | `go`, `curl`, `python3`, `jq`, `shasum`, `git`; `opa` optional; **no** Docker broker |
 | `make test-stream` | Docker; pulls/starts Redpanda; full streaming smoke |
 | `make test-obs` | Docker; stream + Jaeger; asserts traces in Jaeger API |
+| `make sbom` / `make sign` | `syft` / `docker` + `cosign`, and local images tagged `steering-gateway:dev` and `steering-worker:dev` (built by `scripts/kind_load.sh`, which needs an existing kind cluster) |
 
 ## Troubleshooting
 
 - **`address already in use` on 8080 / 9090** — stop Compose (`./scripts/compose_down.sh`) or stop other listeners; `demo_local.sh` uses gateway **8081** on purpose to avoid clashing with Compose **8080**.
+- **`demo_local: port 8081 is already serving`** (or `9090`) — something already answers on that port; `demo_local.sh` refuses to run against it. Stop that process (Compose's worker also uses `9090`).
 - **`503` on `POST /decide` with streaming** — Kafka publish failed (broker not ready, wrong bootstrap inside containers, or network). Confirm `COMPOSE_PROFILES=stream` and that you did not override `KAFKA_BOOTSTRAP_SERVERS` with a host-only address for services.
 - **Stale shell env after streaming** — `unset KAFKA_BOOTSTRAP_SERVERS` before a fresh API-only `compose_up`.
 - **Kind vs streaming** — `make kind-demo` is HTTP-only today; streaming parity is not deployed in Kind yet (see `docs/roadmap.md`).
@@ -115,7 +117,8 @@ Add to `~/.cursor/mcp.json`:
       "command": "/absolute/path/to/gateway",
       "args": ["--mcp"],
       "env": {
-        "ALLOW_LOCAL_POLICY_FALLBACK": "true"
+        "ALLOW_LOCAL_POLICY_FALLBACK": "true",
+        "STEERING_ROOT": "/absolute/path/to/steering"
       }
     }
   }
@@ -133,7 +136,8 @@ Add to `~/.claude/claude_desktop_config.json`:
       "command": "/absolute/path/to/gateway",
       "args": ["--mcp"],
       "env": {
-        "ALLOW_LOCAL_POLICY_FALLBACK": "true"
+        "ALLOW_LOCAL_POLICY_FALLBACK": "true",
+        "STEERING_ROOT": "/absolute/path/to/steering"
       }
     }
   }
@@ -151,7 +155,8 @@ Add to `.vscode/settings.json`:
       "command": "/absolute/path/to/gateway",
       "args": ["--mcp"],
       "env": {
-        "ALLOW_LOCAL_POLICY_FALLBACK": "true"
+        "ALLOW_LOCAL_POLICY_FALLBACK": "true",
+        "STEERING_ROOT": "/absolute/path/to/steering"
       }
     }
   }
@@ -165,6 +170,7 @@ Add to `.vscode/settings.json`:
 | `ALLOW_LOCAL_POLICY_FALLBACK` | `false` | Enable built-in policy rules (no OPA needed) |
 | `OPA_URL` | *(unset)* | Point to an OPA instance for real policy evaluation |
 | `KAFKA_BOOTSTRAP_SERVERS` | *(unset)* | Publish decision traces and evidence to Kafka |
+| `STEERING_ROOT` | *(unset)* | Absolute path to this repo — **set it in every MCP client config**. The gateway inherits the client's working directory, so without it the local fallback does not find `roles.json` and denies every request (`roles.json not found`) |
 | `POLICY_BUNDLE_HASH` | `local-dev` | Reported in traces and policy status |
 
 ### Workflow

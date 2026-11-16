@@ -24,9 +24,9 @@
     "engine": "opa",
     "bundle_version": "0.1.0",
     "bundle_hash": "sha256:deadbeef",
-    "decision": "allow",
+    "decision": "deny",
     "rationale": [
-      { "code": "ALLOW_DEV", "message": "Deploys to dev are allowed for role=developer." }
+      { "code": "DEFAULT_DENY", "message": "Denied by default." }
     ]
   },
   "data_classification": "internal",

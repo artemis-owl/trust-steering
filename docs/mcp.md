@@ -56,9 +56,9 @@ Call **before** starting a significant task.
 **Returns:**
 ```json
 {
-  "correlation_id": "corr-a1b2c3d4e5f6g7h8",
+  "correlation_id": "corr-a1b2c3d4e5f6a7b8",
   "decision": "allow",
-  "rationale": [{"code": "ALLOW_DEV", "message": "Dev actions allowed for developers."}],
+  "rationale": [{"code": "ALLOW_ACTION", "message": "Action 'build' permitted for role 'developer'."}],
   "event_id": "abc123...",
   "trace_id": "def456..."
 }
@@ -68,7 +68,7 @@ If `decision` is `"deny"`, the agent should **stop** and relay the rationale to 
 
 ### Human approval flow
 
-Prod deploys are gated on **out-of-band human approval**. The agent cannot self-attest: `human_approved` is a trust-reserved attribute, and the policy input only ever receives it from the gateway's server-side approval store (`APPROVALS_DIR`, default `out/approvals`).
+Prod deploys are gated on **out-of-band human approval**. The MCP channel rejects `human_approved` from the agent: it is a trust-reserved attribute, and the policy input only receives it from the gateway's approval store (`APPROVALS_DIR`, default `out/approvals`). That store is a directory of files; a grant is a file written by `scripts/approve.sh`, which authenticates nobody and records whatever `-approver` (default `$USER`) it is given. Anything that can run that script or write that directory can grant.
 
 The flow:
 
@@ -117,7 +117,7 @@ decision (`details.policy_decision`), so it joins the decision trace it closes.
 ```json
 {
   "event_id": "xyz789...",
-  "correlation_id": "corr-a1b2c3d4e5f6g7h8",
+  "correlation_id": "corr-a1b2c3d4e5f6a7b8",
   "status": "recorded",
   "result": "ok"
 }
@@ -256,11 +256,11 @@ User:    "Refactor the auth module to use JWT tokens"
 
 Agent:   [calls request_work_order: action=refactor, resource=auth-module,
           context="Refactor auth from session-based to JWT tokens"]
-         → correlation_id: corr-a1b2c3d4, decision: allow
+         → correlation_id: corr-a1b2c3d4e5f6a7b8, decision: allow
 
 Agent:   [performs the refactoring across multiple files]
 
-Agent:   [calls submit_evidence: correlation_id=corr-a1b2c3d4, result=ok,
+Agent:   [calls submit_evidence: correlation_id=corr-a1b2c3d4e5f6a7b8, result=ok,
           summary="Refactored auth to JWT. Modified 4 files: auth.go,
           middleware.go, handler.go, auth_test.go"]
          → Evidence recorded
@@ -275,8 +275,10 @@ The user never had to ask for authorization or evidence submission — the rules
 
 [`tools/governed-inference/governed_inference.py`](../tools/governed-inference/governed_inference.py) is a standard-library consumer that speaks to `./gateway --mcp` over stdio and asks for two work orders for one confidential request: one for a route off the machine (denied, no call made) and one for `local`. Only on an allow does it call the local OpenAI-compatible server itself, then it reports the call with `submit_evidence`; steering never sees the inference traffic. Its test (`tools/governed-inference/test_governed_inference.py`, run by `scripts/test.sh`) proves no model call is made without an allow.
 
+It needs the gateway binary built first (`cd services/gateway && go build -o gateway .`), and the gateway it launches inherits its environment, so a policy source must be set: `ALLOW_LOCAL_POLICY_FALLBACK=true` or `OPA_URL`. Without one, every work order fails with `policy engine unavailable`. Run it from the repo root (or set `STEERING_ROOT`) so `roles.json` is found.
+
 ```bash
-python3 tools/governed-inference/governed_inference.py \
+ALLOW_LOCAL_POLICY_FALLBACK=true python3 tools/governed-inference/governed_inference.py \
   --gateway services/gateway/gateway \
   --model-url http://127.0.0.1:8000/v1 \
   --model local
@@ -290,11 +292,11 @@ Every `request_work_order` call produces a `DecisionTrace` event and every `subm
 
 ### Without Kafka (local dev)
 
-Events are returned to the MCP client in the tool response but **not persisted to disk**. They exist in the agent's conversation context only.
+The decision trace and evidence event are returned to the MCP client in the tool response and are not published anywhere. The gateway does write a work-order record per `correlation_id` (`out/workorders/`, or `WORKORDERS_DIR`): the decision, and once evidence is accepted, the close count, times and last result. It is not the trace or the evidence event.
 
 ### With Kafka
 
-Set `KAFKA_BOOTSTRAP_SERVERS` and events are published to:
+Set `KAFKA_BOOTSTRAP_SERVERS` and events are published to the topics below; a tool call fails closed (no allow, no `recorded`) if its event cannot be published:
 - `decision.trace.v1` — Decision traces (pre-flight authorization)
 - `decision.evidence.v1` — Evidence events (post-flight completion)
 
@@ -310,12 +312,14 @@ Set `OTEL_EXPORTER_OTLP_ENDPOINT` and spans are emitted for each tool call, tagg
 |----------|---------|---------|
 | `ALLOW_LOCAL_POLICY_FALLBACK` | `false` | Enable built-in policy (no OPA needed) |
 | `OPA_URL` | *(unset)* | OPA instance for real policy evaluation |
-| `KAFKA_BOOTSTRAP_SERVERS` | *(unset)* | Durable event persistence |
+| `KAFKA_BOOTSTRAP_SERVERS` | *(unset)* | Publish decision traces and evidence to Kafka; without it they are only returned to the caller |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | *(unset)* | Distributed tracing |
 | `POLICY_BUNDLE_HASH` | `local-dev` | Reported in decision traces |
 | `SCHEMA_VERSION` | `0.1.0` | Schema version stamped on events |
 | `STEERING_ROOT` | *(unset)* | Absolute path to the steering repo — **set this in every MCP client config**: the gateway inherits the *governed* repo's cwd, so without it `roles.json` won't resolve and the gateway and approve CLI would read different approval stores |
 | `APPROVALS_DIR` | `$STEERING_ROOT/out/approvals`, else `out/approvals` | Server-side human approval store (shared with `scripts/approve.sh`) |
+| `WORKORDERS_DIR` | `$STEERING_ROOT/out/workorders`, else `out/workorders` | Server-side work-order records, one JSON file per `correlation_id` |
+| `ROLES_CONFIG_PATH` | `$STEERING_ROOT/policies/opa/rego/roles.json`, else relative lookups from the working directory | Roles file the local fallback reads; if none is found, every request is denied (`roles.json not found`) |
 | `MCP_SUBJECT_ROLE` | `developer` | Role asserted for the MCP client — set by the operator, never by the agent |
 | `MCP_AGENT_ID` | `mcp-client` | Subject ID recorded for the MCP client |
 
@@ -328,7 +332,7 @@ No. The MCP server is completely out of the data plane. It governs task authoriz
 The MCP client will fail to launch the server process. Without agent rules, the agent works normally (no governance). With rules, the agent would note that the tool is unavailable and inform you.
 
 **Q: Can the agent approve its own prod deploy?**
-No. `human_approved` is trust-reserved and rejected from client input. Approval only exists as a server-side record written by a human via `scripts/approve.sh`, is bound to one correlation_id + action/resource/environment, expires, and is consumed on first use.
+Not over MCP: `human_approved` is trust-reserved and rejected from client input. Approval exists only as a file in the approvals store, written by `scripts/approve.sh`; it is bound to one correlation_id + action/resource/environment, expires, and is consumed on first use. The script authenticates nobody, so an agent that can run shell commands as the operator, or write the approvals directory, can grant itself.
 
 **Q: Can I deny specific actions?**
 Yes. Both OPA and the local fallback engine dynamically load roles and permitted actions from the [roles.json](../policies/opa/rego/roles.json) configuration file. You can customize or add custom roles/permissions there to be enforced dynamically.

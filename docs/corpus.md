@@ -22,5 +22,5 @@ This is the curated reading spine for the trust + technology engineering domain 
 
 ## How to use this corpus here
 - Each build artifact in `services/`, `policies/`, `schemas/`, and `supplychain/` should map to an evidence need in `docs/audit-packet.md`.
-- If you want a formal mapping table later, add `docs/control-map.md` (anchor on AI RMF outcomes or 800‑53 families).
+- The mapping table to AI RMF outcomes is `docs/control-map.md`.
 

@@ -18,7 +18,7 @@ Minimum contents for a given `correlation_id` (or time window):
 ## Completeness criteria
 An audit packet is “complete” when a reviewer can:
 - Validate payloads against the schemas in `schemas/`
-- Validate the policy identity (exact policy bundle hash/version)
+- Validate the policy identity (`bundle_hash` is the sha256 of `decision.rego`, computed by the launching script; `roles.json` is not in it)
 - Reconstruct the causal chain using `correlation_id` and `trace_id`
 - Confirm the executing workload identity and its artifact provenance (when supplychain is enabled)
 

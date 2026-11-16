@@ -19,17 +19,17 @@ This roadmap is organized around one anchor demo (“Decision Trace Gateway”) 
 
 The July 2026 audit found that the gateway's trust boundary was self-attested: callers could assert their own role and approval flags, and audit events could be silently dropped on broker failure. Fixing that credibly *is* the product. In priority order:
 
-1. **[DONE 2026-07-09]** Evidence durability: MCP tool calls fail closed when the decision trace or evidence event cannot be persisted (same contract as HTTP `/decide`); worker commits offsets only after evidence is durably produced.
+1. **[DONE 2026-07-09]** Evidence durability, with `KAFKA_BOOTSTRAP_SERVERS` set: MCP tool calls fail closed when the decision trace or evidence event cannot be published (same contract as HTTP `/decide`); worker commits offsets only after evidence is produced. Without a broker the trace is returned to the caller and a work-order record is written; nothing else is persisted.
 2. **[DONE 2026-07-09]** Non-spoofable MCP subject: role/identity come from gateway configuration (`MCP_SUBJECT_ROLE`, `MCP_AGENT_ID`); trust-reserved attributes (`role`, `agent_id`, `human_approved`) are rejected from client input.
 3. **[DONE 2026-07-09]** Key hygiene: cosign keys untracked and gitignored (`sign_images.sh` regenerates on demand); old key purged from git history (`git filter-repo`, force-pushed) and rotated.
-4. **[DONE 2026-07-09]** Unforgeable approval gate: prod deploys record a server-side pending approval; a human grants via `scripts/approve.sh` (approver identity, TTL); the gateway consumes the grant (single-use, matched to correlation_id + action/resource/environment) and is the only writer of `human_approved`/`approver` in policy input. Covered by gateway tests; flow documented in `docs/mcp.md`.
+4. **[DONE 2026-07-09]** Approval gate: prod deploys record a server-side pending approval; the MCP channel rejects `human_approved` from the agent; the grant is a file written by `scripts/approve.sh` (approver name, TTL), which authenticates nobody; the gateway consumes the grant (single-use, matched to correlation_id + action/resource/environment) and is the only writer of `human_approved`/`approver` in policy input. Covered by gateway tests; flow documented in `docs/mcp.md`.
 5. **[DONE 2026-07-29]** **Trust-in-the-Loop demo (integration built; evidence session remaining):** the `steering-demo` sibling repo integrates the gateway into a governed project — an approvals-console web UI (the human grant surface) deployed through the gate itself, with an advisory tier (MCP + agent rules) and a physical tier (PreToolUse hook + deploy-script verification of the consumed work order). The full deny → grant-in-console → allow → gated-deploy loop is verified against the real gateway over MCP stdio.
    - [x] **Run the demo with a live agent session (Claude Code / Cursor) and record it as demo evidence; then archive `steering-demo`** (operator ruling, 2026-07-23 repo audit — it is a validation vehicle, not a product)
      - **Status:** `Completed` | **Priority:** *High* | **Project:** [[steering]] | **Source:** `roadmap.md`
      - Completed 2026-07-29, live Claude Code session over MCP stdio against the real stack
        (OPA policy, Redpanda topics, work-order store). Full loop on `corr-7c0d7d79a7243dd6`:
        request → **deny** (`approval_status: pending`) → agent stopped per rules → operator
-       granted **in the console** (`user:williamcorbett`, 15-min TTL) → retry → **allow**
+       granted **in the console** (`user:<operator>`, 15-min TTL) → retry → **allow**
        (grant consumed single-use) → `make deploy ENV=prod` verified the consumed record and
        landed console `84e4761` on :9090 → `submit_evidence` accepted by the new linkage
        enforcement → audit packet exported (`out/audit-packets/corr-7c0d7d79a7243dd6`).
@@ -42,7 +42,7 @@ The July 2026 audit found that the gateway's trust boundary was self-attested: c
 6. **[DONE 2026-07-29]** **Evidence linkage:** `submit_evidence` should validate the correlation_id against a previously issued (and allowed) work order.
    - [x] **Validate `submit_evidence` correlation_id against an issued, allowed work order**
      - **Status:** `Completed` | **Priority:** *High* | **Project:** [[steering]] | **Source:** `roadmap.md`
-     - Delivered 2026-07-29 ([helm brief 0003](../../kestrel-helm/briefs/0003-evidence-grant-linkage.md)):
+     - Delivered 2026-07-29 (helm brief 0003, evidence-grant linkage):
        issued work orders are recorded server-side (`services/gateway/workorders.go`, one JSON
        file per correlation_id under `out/workorders/`, the approvals-store pattern) on both the
        MCP and HTTP `/decide` paths; `submit_evidence` rejects fail-closed unless the
@@ -52,7 +52,7 @@ The July 2026 audit found that the gateway's trust boundary was self-attested: c
        malformed-id, `/decide` recording, and the deny→grant→allow retry; full `make test` green.
    - [x] **An issued work order that is never closed is invisible — no grant/evidence reconciliation**
      - **Status:** `Completed` | **Priority:** *High* | **Project:** [[steering]] | **Source:** `roadmap.md`
-     - Delivered 2026-07-29 ([helm brief 0003](../../kestrel-helm/briefs/0003-evidence-grant-linkage.md)):
+     - Delivered 2026-07-29 (helm brief 0003, evidence-grant linkage):
        `tools/grant-reconcile` joins both topics by correlation_id and reports unclosed grants,
        unlinked evidence, and identical-task duplicate grants (exit 2 on findings). The dogfood
        shape is a regression fixture (`main_test.go`). Live re-verification against the real
@@ -91,17 +91,17 @@ The July 2026 audit found that the gateway's trust boundary was self-attested: c
 ## Next tasks (after Phase 6)
 
 - Policy/schema change gates in CI (tests + short risk note per change); basic CI (build/test/opa/schema checks) landed 2026-07-09. *(Tracked as the Phase 5 item "Add change gates and lightweight risk notes".)*
-- **[DONE]** Implement `scripts/export_audit_packet.sh` per `docs/audit-packet.md`.
+- **[DONE]** Implement `scripts/export_audit_packet.sh` per `docs/audit-packet.md` (one correlation_id; it copies the cosign public key and SBOMs when present and verifies no signature).
 
 ### Repo floor (kestrel-helm `decisions/0014`)
 
 The uv-lockfile plank of decision 0014 translates to Go-module hygiene here.
-Landed 2026-09-05: all seven modules aligned to `go 1.24.0` (matching CI's pinned
-Go 1.24), the stray `toolchain go1.24.2` line dropped from `services/gateway`,
+Landed 2026-09-05: six of the seven modules aligned to `go 1.24.0` (matching CI's
+pinned Go 1.24; `tools/grant-reconcile` stays at `go 1.25.0`, see below), the stray `toolchain go1.24.2` line dropped from `services/gateway`,
 the gateway/worker Dockerfile builder stages moved `golang:1.23` → `golang:1.24`,
 and `CHANGELOG.md` added (retroactive `0.1.0` for the standing substrate, `0.2.0`
-for the alignment). The repo still carries **zero git tags**; `v0.2.0` is the
-operator's to tag on merge.
+for the alignment). The repo now has one tag, `v0.2.0` (`6658d1d`); there is
+no `v0.1.0` tag.
 
 Findings surfaced while doing that work, filed *proposed* per the standing
 posture — scope and priority are the operator's to set:
@@ -114,7 +114,9 @@ posture — scope and priority are the operator's to set:
     `grant-reconcile`. CI also runs `go test` only for the two services, so the
     four tests in `tools/grant-reconcile/main_test.go` — the dogfood-shape
     regression fixture that backs the Phase 6.6 unclosed-grant check — never
-    run. Of the repo's 30 Go tests, CI executes 26.
+    run. Of the repo's 39 Go test functions (gateway 29, worker 5,
+    grant-reconcile 4, audit-packet-fetch 1), CI executes the 34 in the two
+    services.
   - This is the likely cause of the directive drift the floor just paid down:
     `grant-reconcile` was the module furthest ahead (`go 1.25.0`) precisely
     because nothing gated it. Its `go 1.25.0` → `1.24.0` move is therefore the
@@ -183,14 +185,14 @@ These add surface area but do not strengthen the core trust story; pick them up 
 
 - Decision Trace and Evidence events + examples.
 - OPA policy decisions with rationale and policy versioning.
-- “No action without a policy decision” enforceable and testable.
+- Policy decisions testable (`opa test`). The worker records evidence for any well-formed trace it is sent and does not check where the trace came from; it executes nothing, it records.
 - **Delivered path:** Compose (`make compose-up`) and Kind (`make kind-demo`); local process demo remains (`scripts/demo_local.sh`).
 
 ## Phase 2 — Streaming contracts + evidence append
 
 - Publish decision-trace events to a topic boundary (`decision.trace.v1`; Compose stream profile + `KAFKA_*` envs).
-- Consume and execute in a worker, emitting evidence events (`decision.evidence.v1`).
-- Schema validation and compatibility checks as gates (CI + runtime); `scripts/test.sh` remains HTTP-only; `scripts/test_stream.sh` covers broker path.
+- Consume traces in a worker and record evidence events (`decision.evidence.v1`); the worker executes nothing.
+- Schema validation: in CI on the sample payloads and by the demo scripts on their output, not at runtime; `scripts/test.sh` remains HTTP-only; `scripts/test_stream.sh` covers broker path.
 
 ## Phase 3 — Observability as evidence
 
@@ -198,15 +200,15 @@ These add surface area but do not strengthen the core trust story; pick them up 
 - [ ] **Observability further work: metrics/logs, dashboards, deeper “evidence queries”**
   - **Status:** `Planned` | **Priority:** *Low* | **Project:** [[steering]] | **Source:** `roadmap.md`
 
-## Phase 4 — Provenance and software supply chain evidence (done)
+## Phase 4 — Provenance and software supply chain evidence (partial)
 
-- **[DONE]** SBOM per artifact (via Syft).
-- **[DONE]** Sign and verify artifacts (via Cosign).
-- **[DONE]** Attach attestations tied to a commit and a build recipe.
+- **[DONE]** SBOM per image (via Syft), from local images `steering-gateway:dev` / `steering-worker:dev` built by `scripts/kind_load.sh`.
+- **[DONE]** Sign and verify images (via Cosign).
+- [ ] Attestations tied to a commit and a build recipe — not built: `scripts/sign_images.sh` attests the SBOM only, and nothing ties an attestation to a commit or build recipe.
 
 ## Phase 5 — Audit packet export + change management
 
-- **[DONE]** Export evidence for a correlation_id/window: events, policy bundle hash, schema versions, provenance proofs.
+- **[DONE]** Export evidence for one correlation_id: events, the sha256 of `decision.rego`, schema hashes, and copies of the cosign public key and SBOMs when present. No time window, no signature verification, no zip.
 - [ ] **Add change gates and lightweight risk notes for policy/schema changes**
   - **Status:** `Planned` | **Priority:** *Medium* | **Project:** [[steering]] | **Source:** `roadmap.md`
 

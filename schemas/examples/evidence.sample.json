@@ -5,12 +5,13 @@
   "correlation_id": "corr-123",
   "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
   "span_id": null,
-  "evidence_type": "action.executed",
+  "evidence_type": "action.skipped",
   "action": "deploy",
-  "result": "ok",
+  "result": "skipped",
   "details": {
-    "target": "dev",
-    "note": "placeholder evidence"
+    "policy_decision": "deny",
+    "resource": "service:gateway",
+    "environment": "dev"
   },
   "workload": {
     "service_name": "worker",
