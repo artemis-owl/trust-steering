@@ -12,6 +12,17 @@ version numbers below.
 
 ## [Unreleased]
 
+### Added
+
+- The governed inference consumer (`tools/governed-inference/governed_inference.py`)
+  makes the call off the machine when policy allows it (e.g.
+  `--classification internal`). It sends one Anthropic Messages API call
+  (`--offsite-url`, key from `ANTHROPIC_API_KEY` only, billed to the key's owner)
+  and reports it with `submit_evidence`: token counts, latency and stop reason,
+  never the prompt, the reply or the key. With no key, or with `--no-call`, no
+  call is made and the evidence is `skipped`. New `--offsite-only` flag. The work
+  orders' `context` names the declared classification.
+
 ### Changed
 
 - `scripts/demo_local.sh` builds the gateway and worker into its output
